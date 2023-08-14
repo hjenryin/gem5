@@ -75,3 +75,7 @@ class GarnetSyntheticTraffic(ClockedObject):
     )
     test = RequestPort("Port to the memory system to test")
     system = Param.System(Parent.any, "System we belong to")
+    topology = Param.String(
+        "MESH_TOPOLOGY_",
+        "Topology type, which decides how the traffic types behave",
+    )

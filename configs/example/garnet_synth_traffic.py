@@ -135,6 +135,7 @@ cpus = [
         inj_vnet=args.inj_vnet,
         precision=args.precision,
         num_dest=args.num_dirs,
+        topology=args.topology,
     )
     for i in range(args.num_cpus)
 ]
@@ -173,7 +174,7 @@ root = Root(full_system=False, system=system)
 root.system.mem_mode = "timing"
 
 # Not much point in this being higher than the L1 latency
-m5.ticks.setGlobalFrequency("1ps")
+m5.ticks.setGlobalFrequency("500ps")
 
 # instantiate configuration
 m5.instantiate()

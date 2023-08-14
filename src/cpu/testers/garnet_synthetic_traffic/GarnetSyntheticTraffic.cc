@@ -96,7 +96,14 @@ GarnetSyntheticTraffic::GarnetSyntheticTraffic(const Params &p)
     // set up counters
     noResponseCycles = 0;
     schedule(tickEvent, 0);
-
+    if (p.topology == "Ring")
+    {
+        topology = RING_TOPOLOGY_;
+    }
+    else
+    {
+        topology = MESH_TOPOLOGY_;
+    }
     initTrafficType();
     if (trafficStringToEnum.count(trafficType) == 0) {
         fatal("Unknown Traffic Type: %s!\n", traffic);
@@ -184,7 +191,13 @@ void
 GarnetSyntheticTraffic::generatePkt()
 {
     int num_destinations = numDestinations;
-    int radix = (int) sqrt(num_destinations);
+    int radix;
+    if (topology == RING_TOPOLOGY_)
+        radix = num_destinations;
+    else if (topology == MESH_TOPOLOGY_)
+        radix = (int)sqrt(num_destinations);
+    else
+        fatal("Unknown topology!\n");
     unsigned destination = id;
     int dest_x = -1;
     int dest_y = -1;
@@ -222,7 +235,7 @@ GarnetSyntheticTraffic::generatePkt()
     } else if (traffic == NEIGHBOR_) {
             dest_x = (src_x + 1) % radix;
             dest_y = src_y;
-            destination = dest_y*radix + dest_x;
+            destination = dest_y * radix + dest_x;
     } else if (traffic == SHUFFLE_) {
         if (source < num_destinations/2)
             destination = source*2;

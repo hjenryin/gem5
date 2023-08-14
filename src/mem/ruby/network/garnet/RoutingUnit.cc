@@ -191,6 +191,10 @@ RoutingUnit::outportCompute(RouteInfo route, int inport,
         case XY_:     outport =
             outportComputeXY(route, inport, inport_dirn); break;
         // any custom algorithm
+        case RING_:
+        outport =
+            outportComputeRing(route, inport, inport_dirn);
+        break;
         case CUSTOM_: outport =
             outportComputeCustom(route, inport, inport_dirn); break;
         default: outport =
@@ -257,6 +261,32 @@ RoutingUnit::outportComputeXY(RouteInfo route,
         panic("x_hops == y_hops == 0");
     }
 
+    return m_outports_dirn2idx[outport_dirn];
+}
+
+// Routing for Ring (1d torus)
+// Find the nearest direction
+int RoutingUnit::outportComputeRing(RouteInfo route, int inport,
+                                    PortDirection inport_dirn) {
+    PortDirection outport_dirn = "Unknown";
+
+    int num_routers = m_router->get_net_ptr()->getNumRouters();
+    assert(num_routers > 0);
+
+    int my_id = m_router->get_id();
+
+    int dest_id = route.dest_router;
+
+    int distance = (dest_id - my_id + num_routers) % num_routers;
+
+    if (distance <= (num_routers / 2))
+    {
+        outport_dirn = "East";
+    }
+    else
+    {
+        outport_dirn = "West";
+    }
     return m_outports_dirn2idx[outport_dirn];
 }
 

@@ -73,6 +73,10 @@ class RoutingUnit
                          int inport,
                          PortDirection inport_dirn);
 
+    // Routing for Ring (1d torus)
+    int outportComputeRing(RouteInfo route, int inport,
+                           PortDirection inport_dirn);
+
     // Custom Routing Algorithm using Port Directions
     int outportComputeCustom(RouteInfo route,
                              int inport,

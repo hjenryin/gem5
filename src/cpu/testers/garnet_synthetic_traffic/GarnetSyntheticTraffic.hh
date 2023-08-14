@@ -107,7 +107,13 @@ class GarnetSyntheticTraffic : public ClockedObject
         // Hold onto data pointer
         uint8_t *data;
     };
-
+    enum Topology
+    {
+      RING_TOPOLOGY_ = 0,
+      MESH_TOPOLOGY_ = 1,
+      COUNT_TOPOLOGY_
+    };
+    Topology topology;
     PacketPtr retryPkt;
     unsigned size;
     int id;

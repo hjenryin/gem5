@@ -45,6 +45,7 @@
 #include "mem/ruby/network/garnet/NetworkLink.hh"
 #include "mem/ruby/network/garnet/Router.hh"
 #include "mem/ruby/system/RubySystem.hh"
+#include "sim/root.hh"
 
 namespace gem5
 {
@@ -391,27 +392,27 @@ GarnetNetwork::regStats()
         .init(m_virtual_networks)
         .name(name() + ".packets_received")
         .flags(statistics::pdf | statistics::total | statistics::nozero |
-            statistics::oneline)
-        ;
+               statistics::oneline)
+        .unit(UNIT_COUNT);
 
     m_packets_injected
         .init(m_virtual_networks)
         .name(name() + ".packets_injected")
         .flags(statistics::pdf | statistics::total | statistics::nozero |
-            statistics::oneline)
-        ;
+               statistics::oneline)
+        .unit(UNIT_COUNT);
 
     m_packet_network_latency
         .init(m_virtual_networks)
         .name(name() + ".packet_network_latency")
         .flags(statistics::oneline)
-        ;
+        .unit(UNIT_TICK);
 
     m_packet_queueing_latency
         .init(m_virtual_networks)
         .name(name() + ".packet_queueing_latency")
         .flags(statistics::oneline)
-        ;
+        .unit(UNIT_TICK);
 
     for (int i = 0; i < m_virtual_networks; i++) {
         m_packets_received.subname(i, csprintf("vnet-%i", i));
@@ -428,22 +429,26 @@ GarnetNetwork::regStats()
 
     m_avg_packet_vqueue_latency
         .name(name() + ".average_packet_vqueue_latency")
-        .flags(statistics::oneline);
+        .flags(statistics::oneline)
+        .unit(UNIT_TICK);
     m_avg_packet_vqueue_latency =
         m_packet_queueing_latency / m_packets_received;
 
     m_avg_packet_network_latency
-        .name(name() + ".average_packet_network_latency");
+        .name(name() + ".average_packet_network_latency")
+        .unit(UNIT_TICK);
     m_avg_packet_network_latency =
         sum(m_packet_network_latency) / sum(m_packets_received);
 
     m_avg_packet_queueing_latency
-        .name(name() + ".average_packet_queueing_latency");
+        .name(name() + ".average_packet_queueing_latency")
+        .unit(UNIT_TICK);
     m_avg_packet_queueing_latency
         = sum(m_packet_queueing_latency) / sum(m_packets_received);
 
     m_avg_packet_latency
-        .name(name() + ".average_packet_latency");
+        .name(name() + ".average_packet_latency")
+        .unit(UNIT_TICK);
     m_avg_packet_latency
         = m_avg_packet_network_latency + m_avg_packet_queueing_latency;
 
@@ -509,12 +514,19 @@ GarnetNetwork::regStats()
 
 
     // Hops
-    m_avg_hops.name(name() + ".average_hops");
+    m_avg_hops.name(name() + ".average_hops").unit(UNIT_COUNT);
     m_avg_hops = m_total_hops / sum(m_flits_received);
 
+    // Reception Rate
+    recep_rate.name(name() + ".reception_rate")
+        .unit(statistics::units::Rate<statistics::units::Ratio,
+                                      statistics::units::Tick>::get())
+        .desc("Reception Rate calculated by ticks.");
+    recep_rate = sum(m_packets_received) / (m_num_rows * m_num_cols) /
+                 (rootStats.simTicks);
+
     // Links
-    m_total_ext_in_link_utilization
-        .name(name() + ".ext_in_link_utilization");
+    m_total_ext_in_link_utilization.name(name() + ".ext_in_link_utilization");
     m_total_ext_out_link_utilization
         .name(name() + ".ext_out_link_utilization");
     m_total_int_link_utilization
