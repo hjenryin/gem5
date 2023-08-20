@@ -288,8 +288,7 @@ NetworkInterface::wakeup()
             Credit *t_credit = (Credit*) inCreditLink->consumeLink();
             outVcState[t_credit->get_vc()].increment_credit();
             if (t_credit->is_free_signal()) {
-                outVcState[t_credit->get_vc()].setState(IDLE_,
-                    curTick());
+                outVcState[t_credit->get_vc()].vc_dec_flit(curTick());
             }
             delete t_credit;
         }
@@ -450,7 +449,7 @@ NetworkInterface::flitisizeMessage(MsgPtr msg_ptr, int vnet)
         }
 
         m_ni_out_vcs_enqueue_time[vc] = curTick();
-        outVcState[vc].setState(ACTIVE_, curTick());
+        outVcState[vc].vc_add_flit(curTick());
     }
     return true ;
 }
@@ -465,8 +464,7 @@ NetworkInterface::calculateVC(int vnet)
         if (m_vc_allocator[vnet] == m_vc_per_vnet)
             m_vc_allocator[vnet] = 0;
 
-        if (outVcState[(vnet*m_vc_per_vnet) + delta].isInState(
-                    IDLE_, curTick())) {
+        if (!outVcState[(vnet * m_vc_per_vnet) + delta].isFull(curTick())) {
             vc_busy_counter[vnet] = 0;
             return ((vnet*m_vc_per_vnet) + delta);
         }

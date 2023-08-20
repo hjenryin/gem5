@@ -84,16 +84,8 @@ class OutputUnit : public Consumer
         return m_out_link->get_id();
     }
 
-    inline void
-    set_vc_state(VC_state_type state, int vc, Tick curTime)
-    {
-      outVcState[vc].setState(state, curTime);
-    }
-
-    inline bool
-    is_vc_idle(int vc, Tick curTime)
-    {
-        return (outVcState[vc].isInState(IDLE_, curTime));
+    inline bool is_vc_avail(int vc, Tick curTime) {
+        return !outVcState[vc].isFull(curTime);
     }
 
     void insert_flit(flit *t_flit);

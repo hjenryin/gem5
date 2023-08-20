@@ -246,9 +246,12 @@ GarnetSyntheticTraffic::generatePkt()
             dest_y = src_x;
             destination = dest_y*radix + dest_x;
     } else if (traffic == TORNADO_) {
-        dest_x = (src_x + (int) ceil(radix/2) - 1) % radix;
-        dest_y = src_y;
-        destination = dest_y*radix + dest_x;
+            int bias = (int)ceil(radix / 2) - 1;
+            if (topology == RING_TOPOLOGY_)
+            bias += 1;
+            dest_x = (src_x + bias) % radix;
+            dest_y = src_y;
+            destination = dest_y * radix + dest_x;
     }
     else {
         fatal("Unknown Traffic Type: %s!\n", traffic);

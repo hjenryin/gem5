@@ -40,35 +40,22 @@ namespace ruby
 namespace garnet
 {
 
-VirtualChannel::VirtualChannel()
-  : inputBuffer(), m_vc_state(IDLE_, Tick(0)), m_output_port(-1),
-    m_enqueue_time(INFINITE_), m_output_vc(-1)
-{
+VirtualChannel::VirtualChannel(int max_buffer_depth)
+    : inputBuffer(max_buffer_depth) {}
+
+void VirtualChannel::dec_vc_flit_num(Tick curTime) {
+    m_vc_state_meta.pop_front();
 }
 
-void
-VirtualChannel::set_idle(Tick curTime)
-{
-    m_vc_state.first = IDLE_;
-    m_vc_state.second = curTime;
-    m_enqueue_time = Tick(INFINITE_);
-    m_output_port = -1;
-    m_output_vc = -1;
-}
-
-void
-VirtualChannel::set_active(Tick curTime)
-{
-    m_vc_state.first = ACTIVE_;
-    m_vc_state.second = curTime;
-    m_enqueue_time = curTime;
+void VirtualChannel::add_vc_flit_num(Tick curTime) {
+    m_vc_state_meta.emplace_back(curTime);
 }
 
 bool
 VirtualChannel::need_stage(flit_stage stage, Tick time)
 {
     if (inputBuffer.isReady(time)) {
-        assert(m_vc_state.first == ACTIVE_ && m_vc_state.second <= time);
+        assert(get_state_size() > 0 && get_enqueue_time() <= time);
         flit *t_flit = inputBuffer.peekTopFlit();
         return(t_flit->is_stage(stage, time));
     }

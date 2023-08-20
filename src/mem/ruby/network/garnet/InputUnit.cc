@@ -31,6 +31,7 @@
 
 #include "mem/ruby/network/garnet/InputUnit.hh"
 
+#include "debug/Lab3.hh"
 #include "debug/RubyNetwork.hh"
 #include "mem/ruby/network/garnet/Credit.hh"
 #include "mem/ruby/network/garnet/Router.hh"
@@ -58,8 +59,10 @@ InputUnit::InputUnit(int id, PortDirection direction, Router *router)
 
     // Instantiating the virtual channels
     virtualChannels.reserve(m_num_vcs);
-    for (int i=0; i < m_num_vcs; i++) {
-        virtualChannels.emplace_back();
+    int wormhole = router->get_wormhole();
+    int vc_max_depth = (wormhole == 0 ? 1 : wormhole);
+    for (int i = 0; i < m_num_vcs; i++) {
+        virtualChannels.emplace_back(vc_max_depth);
     }
 }
 
@@ -90,7 +93,7 @@ InputUnit::wakeup()
         if ((t_flit->get_type() == HEAD_) ||
             (t_flit->get_type() == HEAD_TAIL_)) {
 
-            assert(virtualChannels[vc].get_state() == IDLE_);
+            assert(!virtualChannels[vc].isFull());
             set_vc_active(vc, curTick());
 
             // Route computation for this vc
@@ -103,7 +106,7 @@ InputUnit::wakeup()
             grant_outport(vc, outport);
 
         } else {
-            assert(virtualChannels[vc].get_state() == ACTIVE_);
+            assert(virtualChannels[vc].get_state_size() > 0);
         }
 
 

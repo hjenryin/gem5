@@ -67,7 +67,9 @@ class Mesh_XY(SimpleTopology):
 
         # Create the routers in the mesh
         routers = [
-            Router(router_id=i, latency=router_latency)
+            Router(
+                router_id=i, latency=router_latency, wormhole=options.wormhole
+            )
             for i in range(num_routers)
         ]
         network.routers = routers

@@ -119,6 +119,13 @@ def define_options(parser):
         help="""SimpleNetwork links uses a separate physical
             channel for each virtual network""",
     )
+    parser.add_argument(
+        "--wormhole",
+        action="store",
+        type=int,
+        default=0,
+        help="0: disable, otherwise: the depth of each VC",
+    )
 
 
 def create_network(options, ruby):
@@ -157,6 +164,7 @@ def create_network(options, ruby):
         ext_links=[],
         int_links=[],
         netifs=[],
+        buffers_per_ctrl_vc=options.wormhole if options.wormhole != 0 else 1,
     )
 
     return (network, IntLinkClass, ExtLinkClass, RouterClass, InterfaceClass)

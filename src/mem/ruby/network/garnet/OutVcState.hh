@@ -53,22 +53,26 @@ class OutVcState
     void increment_credit();
     void decrement_credit();
 
-    inline bool
-    isInState(VC_state_type state, Tick request_time)
-    {
-        return ((m_vc_state == state) && (request_time >= m_time) );
+    inline bool isInState(VC_flit_num state, Tick request_time) {
+        return ((vc_flit_num == state) && (request_time >= m_time));
     }
-    inline void
-    setState(VC_state_type state, Tick time)
-    {
-        m_vc_state = state;
+    inline void vc_add_flit(Tick time) {
+        vc_flit_num += 1;
         m_time = time;
     }
+    inline void vc_dec_flit(Tick time) {
+        vc_flit_num -= 1;
+        m_time = time;
+    }
+    inline bool isFull(Tick time) {
+        return ((time >= m_time) && (vc_flit_num == m_max_credit_count));
+    }
+    inline bool isEmpty(Tick time) { return (vc_flit_num == 0); }
 
   private:
     int m_id ;
     Tick m_time;
-    VC_state_type m_vc_state;
+    VC_flit_num vc_flit_num;
     int m_credit_count;
     int m_max_credit_count;
 };

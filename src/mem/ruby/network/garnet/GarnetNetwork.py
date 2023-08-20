@@ -85,3 +85,4 @@ class GarnetRouter(BasicRouter):
     width = Param.UInt32(
         Parent.ni_flit_size, "bit width supported by the router"
     )
+    wormhole = Param.UInt32(0, "0: disable, otherwise: the depth of each VC")

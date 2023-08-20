@@ -46,7 +46,7 @@ OutVcState::OutVcState(int id, GarnetNetwork *network_ptr,
     : m_time(0)
 {
     m_id = id;
-    m_vc_state = IDLE_;
+    vc_flit_num = 0;
     /*
      * We find the virtual network using the number of
      * vcs per vnet. This assumes that the same vcs per

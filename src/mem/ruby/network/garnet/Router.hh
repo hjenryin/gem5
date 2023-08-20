@@ -89,6 +89,7 @@ class Router : public BasicRouter, public Consumer
     int get_num_inports()   { return m_input_unit.size(); }
     int get_num_outports()  { return m_output_unit.size(); }
     int get_id()            { return m_id; }
+    int get_wormhole() { return wormhole; }
 
     void init_net_ptr(GarnetNetwork* net_ptr)
     {
@@ -147,6 +148,7 @@ class Router : public BasicRouter, public Consumer
     uint32_t m_virtual_networks, m_vc_per_vnet, m_num_vcs;
     uint32_t m_bit_width;
     GarnetNetwork *m_network_ptr;
+    uint32_t wormhole;
 
     RoutingUnit routingUnit;
     SwitchAllocator switchAllocator;

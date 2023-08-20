@@ -66,13 +66,13 @@ class InputUnit : public Consumer
     inline void
     set_vc_idle(int vc, Tick curTime)
     {
-        virtualChannels[vc].set_idle(curTime);
+        virtualChannels[vc].dec_vc_flit_num(curTime);
     }
 
     inline void
     set_vc_active(int vc, Tick curTime)
     {
-        virtualChannels[vc].set_active(curTime);
+        virtualChannels[vc].add_vc_flit_num(curTime);
     }
 
     inline void
@@ -124,6 +124,8 @@ class InputUnit : public Consumer
     {
         return virtualChannels[vc].need_stage(stage, time);
     }
+
+    inline bool isFull(int invc) { return virtualChannels[invc].isFull(); }
 
     inline bool
     isReady(int invc, Tick curTime)

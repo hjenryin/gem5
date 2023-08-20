@@ -188,19 +188,18 @@ SwitchAllocator::arbitrate_outports()
                 // remove flit from Input VC
                 flit *t_flit = input_unit->getTopFlit(invc);
 
-                DPRINTF(RubyNetwork, "SwitchAllocator at Router %d "
-                                     "granted outvc %d at outport %d "
-                                     "to invc %d at inport %d to flit %s at "
-                                     "cycle: %lld\n",
+                DPRINTF(RubyNetwork,
+                        "SwitchAllocator at Router %d "
+                        "granted outvc %d at outport %d "
+                        "to invc %d at inport %d to flit %s at "
+                        "cycle: %lld\n",
                         m_router->get_id(), outvc,
                         m_router->getPortDirectionName(
                             output_unit->get_direction()),
                         invc,
                         m_router->getPortDirectionName(
                             input_unit->get_direction()),
-                            *t_flit,
-                        m_router->curCycle());
-
+                        *t_flit, m_router->curCycle());
 
                 // Update outport field in the flit since this is
                 // used by CrossbarSwitch code to send it out of
@@ -224,14 +223,15 @@ SwitchAllocator::arbitrate_outports()
                 if ((t_flit->get_type() == TAIL_) ||
                     t_flit->get_type() == HEAD_TAIL_) {
 
-                    // This Input VC should now be empty
-                    assert(!(input_unit->isReady(invc, curTick())));
+                    // This Input VC should not be full now
+                    assert(!(input_unit->isFull(invc)));
 
                     // Free this VC
                     input_unit->set_vc_idle(invc, curTick());
 
                     // Send a credit back
-                    // along with the information that this VC is now idle
+                    // along with the information that this VC is not fully
+                    // occupied now
                     input_unit->increment_credit(invc, true, curTick());
                 } else {
                     // Send a credit back

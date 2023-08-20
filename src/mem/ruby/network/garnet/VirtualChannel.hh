@@ -33,7 +33,8 @@
 #define __MEM_RUBY_NETWORK_GARNET_0_VIRTUALCHANNEL_HH__
 
 #include <utility>
-
+#include "base/trace.hh"
+#include "debug/Lab3.hh"
 #include "mem/ruby/network/garnet/CommonTypes.hh"
 #include "mem/ruby/network/garnet/flitBuffer.hh"
 
@@ -49,20 +50,29 @@ namespace garnet
 class VirtualChannel
 {
   public:
-    VirtualChannel();
+    VirtualChannel(int max_buffer_depth = 1);
     ~VirtualChannel() = default;
 
     bool need_stage(flit_stage stage, Tick time);
-    void set_idle(Tick curTime);
-    void set_active(Tick curTime);
-    void set_outvc(int outvc)               { m_output_vc = outvc; }
-    inline int get_outvc()                  { return m_output_vc; }
-    void set_outport(int outport)           { m_output_port = outport; };
-    inline int get_outport()                  { return m_output_port; }
+    void dec_vc_flit_num(Tick curTime);
+    void add_vc_flit_num(Tick curTime);
+    void set_outvc(int outvc) {
+        m_vc_state_meta.front().m_outvc = outvc;
+    } // front because this is done at arbitrate outport
+    inline int get_outvc() { return m_vc_state_meta.front().m_outvc; }
+    void set_outport(int outport) {
+        m_vc_state_meta.back().m_outport = outport;
+    }; // back because this is done at VC insertion
+    inline int get_outport() { return m_vc_state_meta.front().m_outport; }
 
-    inline Tick get_enqueue_time()          { return m_enqueue_time; }
-    inline void set_enqueue_time(Tick time) { m_enqueue_time = time; }
-    inline VC_state_type get_state()        { return m_vc_state.first; }
+    inline Tick get_enqueue_time() {
+        return m_vc_state_meta.front().m_enqueue_time;
+    }
+
+    inline VC_flit_num get_state_size() { return m_vc_state_meta.size(); }
+    inline bool isFull() {
+        return inputBuffer.getSize() == inputBuffer.getMaxSize();
+    }
 
     inline bool
     isReady(Tick curTime)
@@ -74,13 +84,6 @@ class VirtualChannel
     insertFlit(flit *t_flit)
     {
         inputBuffer.insert(t_flit);
-    }
-
-    inline void
-    set_state(VC_state_type m_state, Tick curTime)
-    {
-        m_vc_state.first = m_state;
-        m_vc_state.second = curTime;
     }
 
     inline flit*
@@ -100,10 +103,15 @@ class VirtualChannel
 
   private:
     flitBuffer inputBuffer;
-    std::pair<VC_state_type, Tick> m_vc_state;
-    int m_output_port;
-    Tick m_enqueue_time;
-    int m_output_vc;
+    struct VC_state_meta
+    {
+        int m_outport;
+        int m_outvc;
+        Tick m_enqueue_time;
+        VC_state_meta(Tick m_enqueue_time)
+            : m_enqueue_time(m_enqueue_time), m_outport(-1), m_outvc(-1) {}
+    };
+    std::deque<VC_state_meta> m_vc_state_meta;
 };
 
 } // namespace garnet

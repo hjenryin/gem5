@@ -88,7 +88,7 @@ OutputUnit::increment_credit(int out_vc)
 bool
 OutputUnit::has_credit(int out_vc)
 {
-    assert(outVcState[out_vc].isInState(ACTIVE_, curTick()));
+    assert(!outVcState[out_vc].isEmpty(curTick()));
     return outVcState[out_vc].has_credit();
 }
 
@@ -99,7 +99,7 @@ OutputUnit::has_free_vc(int vnet)
 {
     int vc_base = vnet*m_vc_per_vnet;
     for (int vc = vc_base; vc < vc_base + m_vc_per_vnet; vc++) {
-        if (is_vc_idle(vc, curTick()))
+        if (is_vc_avail(vc, curTick()))
             return true;
     }
 
@@ -112,8 +112,8 @@ OutputUnit::select_free_vc(int vnet)
 {
     int vc_base = vnet*m_vc_per_vnet;
     for (int vc = vc_base; vc < vc_base + m_vc_per_vnet; vc++) {
-        if (is_vc_idle(vc, curTick())) {
-            outVcState[vc].setState(ACTIVE_, curTick());
+        if (is_vc_avail(vc, curTick())) {
+            outVcState[vc].vc_add_flit(curTick());
             return vc;
         }
     }
@@ -137,7 +137,7 @@ OutputUnit::wakeup()
         increment_credit(t_credit->get_vc());
 
         if (t_credit->is_free_signal())
-            set_vc_state(IDLE_, t_credit->get_vc(), curTick());
+            outVcState[t_credit->get_vc()].vc_dec_flit(curTick());
 
         delete t_credit;
 
