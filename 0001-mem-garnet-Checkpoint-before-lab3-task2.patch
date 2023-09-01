@@ -1,0 +1,441 @@
+From bf685795e15011256cca5c89e7d808e4d12dedba Mon Sep 17 00:00:00 2001
+From: hjenryin <72179072+hjenryin@users.noreply.github.com>
+Date: Mon, 14 Aug 2023 09:58:00 +0800
+Subject: [PATCH 1/2] mem-garnet: Checkpoint before lab3 task2
+
+Change-Id: I53087090b9e16d7d5712a3e2339609043138b179
+---
+ configs/example/garnet_synth_traffic.py       |  3 +-
+ configs/network/Network.py                    |  3 +-
+ configs/topologies/Ring.py                    | 90 +++++++++++++++++++
+ .../GarnetSyntheticTraffic.cc                 | 19 +++-
+ .../GarnetSyntheticTraffic.hh                 |  8 +-
+ .../GarnetSyntheticTraffic.py                 |  4 +
+ src/mem/ruby/network/garnet/CommonTypes.hh    | 10 ++-
+ src/mem/ruby/network/garnet/GarnetNetwork.cc  | 38 +++++---
+ src/mem/ruby/network/garnet/GarnetNetwork.hh  |  1 +
+ src/mem/ruby/network/garnet/GarnetNetwork.py  |  4 +-
+ src/mem/ruby/network/garnet/RoutingUnit.cc    | 30 +++++++
+ src/mem/ruby/network/garnet/RoutingUnit.hh    |  4 +
+ 12 files changed, 192 insertions(+), 22 deletions(-)
+ create mode 100644 configs/topologies/Ring.py
+
+diff --git a/configs/example/garnet_synth_traffic.py b/configs/example/garnet_synth_traffic.py
+index 1da82e11b8..fd9eb6d4aa 100644
+--- a/configs/example/garnet_synth_traffic.py
++++ b/configs/example/garnet_synth_traffic.py
+@@ -135,6 +135,7 @@ cpus = [
+         inj_vnet=args.inj_vnet,
+         precision=args.precision,
+         num_dest=args.num_dirs,
++        topology=args.topology,
+     )
+     for i in range(args.num_cpus)
+ ]
+@@ -173,7 +174,7 @@ root = Root(full_system=False, system=system)
+ root.system.mem_mode = "timing"
+
+ # Not much point in this being higher than the L1 latency
+-m5.ticks.setGlobalFrequency("1ps")
++m5.ticks.setGlobalFrequency("500ps")
+
+ # instantiate configuration
+ m5.instantiate()
+diff --git a/configs/network/Network.py b/configs/network/Network.py
+index a5334741c0..e4ccd86962 100644
+--- a/configs/network/Network.py
++++ b/configs/network/Network.py
+@@ -95,7 +95,8 @@ def define_options(parser):
+         help="""routing algorithm in network.
+             0: weight-based table
+             1: XY (for Mesh. see garnet/RoutingUnit.cc)
+-            2: Custom (see garnet/RoutingUnit.cc""",
++            3: Ring (for 1d Torus. see garnet/RoutingUnit.cc)
++            2: Custom (see garnet/RoutingUnit.cc)""",
+     )
+     parser.add_argument(
+         "--network-fault-model",
+diff --git a/configs/topologies/Ring.py b/configs/topologies/Ring.py
+new file mode 100644
+index 0000000000..b54e9c2a77
+--- /dev/null
++++ b/configs/topologies/Ring.py
+@@ -0,0 +1,90 @@
++from m5.params import *
++from m5.objects import *
++
++from common import FileSystemConfig
++
++from topologies.BaseTopology import SimpleTopology
++
++# Creates a Ring (1-d torus) and directory controllers.
++class Ring(SimpleTopology):
++    description = "Ring"
++
++    def __init__(self, controllers):
++        self.nodes = controllers
++        print(controllers)
++
++    def makeTopology(self, options, network, IntLink, ExtLink, Router):
++        nodes = self.nodes
++
++        num_routers = options.num_cpus
++
++        # default values for link latency and router latency.
++        # Can be over-ridden on a per link/router basis
++        link_latency = options.link_latency  # used by simple and garnet
++        router_latency = options.router_latency  # only used by garnet
++
++        # There must be an evenly divisible number of cntrls to routers
++        assert len(nodes) % num_routers == 0
++        cntrls_per_router = len(nodes) // num_routers
++        print(len(nodes), num_routers)
++
++        # Create the routers in the ring
++        routers = [
++            Router(router_id=i, latency=router_latency)
++            for i in range(num_routers)
++        ]
++        network.routers = routers
++
++        # link counter to set unique link ids
++        link_count = 0
++
++        # Connect the nodes to the routers in the ring
++        ext_links = []
++        for (i, n) in enumerate(nodes):
++            cntrl_level, router_id = divmod(i, num_routers)
++            ext_links.append(
++                ExtLink(
++                    link_id=link_count,
++                    ext_node=n,
++                    int_node=routers[router_id],
++                    latency=link_latency,
++                )
++            )
++            link_count += 1
++
++        network.ext_links = ext_links
++
++        # Create the ring links.
++        int_links = []
++
++        for i in range(num_routers):
++            src_router = routers[i]
++            dst_router = routers[(i + 1) % num_routers]
++
++            int_links.append(
++                IntLink(
++                    link_id=link_count,
++                    src_node=src_router,
++                    dst_node=dst_router,
++                    src_outport="East",
++                    dst_inport="West",
++                    latency=link_latency,
++                    weight=1,
++                )
++            )
++            link_count += 1
++
++            int_links.append(
++                IntLink(
++                    link_id=link_count,
++                    src_node=dst_router,
++                    dst_node=src_router,
++                    src_outport="West",
++                    dst_inport="East",
++                    latency=link_latency,
++                    weight=1,
++                )
++            )
++            link_count += 1
++
++        network.int_links = int_links
+diff --git a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.cc b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.cc
+index fc3d620414..6727e3e5a1 100644
+--- a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.cc
++++ b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.cc
+@@ -96,7 +96,14 @@ GarnetSyntheticTraffic::GarnetSyntheticTraffic(const Params &p)
+     // set up counters
+     noResponseCycles = 0;
+     schedule(tickEvent, 0);
+-
++    if (p.topology == "Ring")
++    {
++        topology = RING_TOPOLOGY_;
++    }
++    else
++    {
++        topology = MESH_TOPOLOGY_;
++    }
+     initTrafficType();
+     if (trafficStringToEnum.count(trafficType) == 0) {
+         fatal("Unknown Traffic Type: %s!\n", traffic);
+@@ -184,7 +191,13 @@ void
+ GarnetSyntheticTraffic::generatePkt()
+ {
+     int num_destinations = numDestinations;
+-    int radix = (int) sqrt(num_destinations);
++    int radix;
++    if (topology == RING_TOPOLOGY_)
++        radix = num_destinations;
++    else if (topology == MESH_TOPOLOGY_)
++        radix = (int)sqrt(num_destinations);
++    else
++        fatal("Unknown topology!\n");
+     unsigned destination = id;
+     int dest_x = -1;
+     int dest_y = -1;
+@@ -222,7 +235,7 @@ GarnetSyntheticTraffic::generatePkt()
+     } else if (traffic == NEIGHBOR_) {
+             dest_x = (src_x + 1) % radix;
+             dest_y = src_y;
+-            destination = dest_y*radix + dest_x;
++            destination = dest_y * radix + dest_x;
+     } else if (traffic == SHUFFLE_) {
+         if (source < num_destinations/2)
+             destination = source*2;
+diff --git a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.hh b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.hh
+index def3ed29a2..3d0f5d4811 100644
+--- a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.hh
++++ b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.hh
+@@ -107,7 +107,13 @@ class GarnetSyntheticTraffic : public ClockedObject
+         // Hold onto data pointer
+         uint8_t *data;
+     };
+-
++    enum Topology
++    {
++      RING_TOPOLOGY_ = 0,
++      MESH_TOPOLOGY_ = 1,
++      COUNT_TOPOLOGY_
++    };
++    Topology topology;
+     PacketPtr retryPkt;
+     unsigned size;
+     int id;
+diff --git a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.py b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.py
+index 6b7e7b8ab4..2117071d98 100644
+--- a/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.py
++++ b/src/cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.py
+@@ -75,3 +75,7 @@ class GarnetSyntheticTraffic(ClockedObject):
+     )
+     test = RequestPort("Port to the memory system to test")
+     system = Param.System(Parent.any, "System we belong to")
++    topology = Param.String(
++        "MESH_TOPOLOGY_",
++        "Topology type, which decides how the traffic types behave",
++    )
+diff --git a/src/mem/ruby/network/garnet/CommonTypes.hh b/src/mem/ruby/network/garnet/CommonTypes.hh
+index 0bf6f3680d..0799aec350 100644
+--- a/src/mem/ruby/network/garnet/CommonTypes.hh
++++ b/src/mem/ruby/network/garnet/CommonTypes.hh
+@@ -50,8 +50,14 @@ enum VC_state_type {IDLE_, VC_AB_, ACTIVE_, NUM_VC_STATE_TYPE_};
+ enum VNET_type {CTRL_VNET_, DATA_VNET_, NULL_VNET_, NUM_VNET_TYPE_};
+ enum flit_stage {I_, VA_, SA_, ST_, LT_, NUM_FLIT_STAGE_};
+ enum link_type { EXT_IN_, EXT_OUT_, INT_, NUM_LINK_TYPES_ };
+-enum RoutingAlgorithm { TABLE_ = 0, XY_ = 1, CUSTOM_ = 2,
+-                        NUM_ROUTING_ALGORITHM_};
++enum RoutingAlgorithm
++{
++  TABLE_ = 0,
++  XY_ = 1,
++  CUSTOM_ = 2,
++  RING_ = 3,
++  NUM_ROUTING_ALGORITHM_
++};
+
+ struct RouteInfo
+ {
+diff --git a/src/mem/ruby/network/garnet/GarnetNetwork.cc b/src/mem/ruby/network/garnet/GarnetNetwork.cc
+index 57922698e0..d5d897e2de 100644
+--- a/src/mem/ruby/network/garnet/GarnetNetwork.cc
++++ b/src/mem/ruby/network/garnet/GarnetNetwork.cc
+@@ -45,6 +45,7 @@
+ #include "mem/ruby/network/garnet/NetworkLink.hh"
+ #include "mem/ruby/network/garnet/Router.hh"
+ #include "mem/ruby/system/RubySystem.hh"
++#include "sim/root.hh"
+
+ namespace gem5
+ {
+@@ -391,27 +392,27 @@ GarnetNetwork::regStats()
+         .init(m_virtual_networks)
+         .name(name() + ".packets_received")
+         .flags(statistics::pdf | statistics::total | statistics::nozero |
+-            statistics::oneline)
+-        ;
++               statistics::oneline)
++        .unit(UNIT_COUNT);
+
+     m_packets_injected
+         .init(m_virtual_networks)
+         .name(name() + ".packets_injected")
+         .flags(statistics::pdf | statistics::total | statistics::nozero |
+-            statistics::oneline)
+-        ;
++               statistics::oneline)
++        .unit(UNIT_COUNT);
+
+     m_packet_network_latency
+         .init(m_virtual_networks)
+         .name(name() + ".packet_network_latency")
+         .flags(statistics::oneline)
+-        ;
++        .unit(UNIT_TICK);
+
+     m_packet_queueing_latency
+         .init(m_virtual_networks)
+         .name(name() + ".packet_queueing_latency")
+         .flags(statistics::oneline)
+-        ;
++        .unit(UNIT_TICK);
+
+     for (int i = 0; i < m_virtual_networks; i++) {
+         m_packets_received.subname(i, csprintf("vnet-%i", i));
+@@ -428,22 +429,26 @@ GarnetNetwork::regStats()
+
+     m_avg_packet_vqueue_latency
+         .name(name() + ".average_packet_vqueue_latency")
+-        .flags(statistics::oneline);
++        .flags(statistics::oneline)
++        .unit(UNIT_TICK);
+     m_avg_packet_vqueue_latency =
+         m_packet_queueing_latency / m_packets_received;
+
+     m_avg_packet_network_latency
+-        .name(name() + ".average_packet_network_latency");
++        .name(name() + ".average_packet_network_latency")
++        .unit(UNIT_TICK);
+     m_avg_packet_network_latency =
+         sum(m_packet_network_latency) / sum(m_packets_received);
+
+     m_avg_packet_queueing_latency
+-        .name(name() + ".average_packet_queueing_latency");
++        .name(name() + ".average_packet_queueing_latency")
++        .unit(UNIT_TICK);
+     m_avg_packet_queueing_latency
+         = sum(m_packet_queueing_latency) / sum(m_packets_received);
+
+     m_avg_packet_latency
+-        .name(name() + ".average_packet_latency");
++        .name(name() + ".average_packet_latency")
++        .unit(UNIT_TICK);
+     m_avg_packet_latency
+         = m_avg_packet_network_latency + m_avg_packet_queueing_latency;
+
+@@ -509,12 +514,19 @@ GarnetNetwork::regStats()
+
+
+     // Hops
+-    m_avg_hops.name(name() + ".average_hops");
++    m_avg_hops.name(name() + ".average_hops").unit(UNIT_COUNT);
+     m_avg_hops = m_total_hops / sum(m_flits_received);
+
++    // Reception Rate
++    recep_rate.name(name() + ".reception_rate")
++        .unit(statistics::units::Rate<statistics::units::Ratio,
++                                      statistics::units::Tick>::get())
++        .desc("Reception Rate calculated by ticks.");
++    recep_rate = sum(m_packets_received) / (m_num_rows * m_num_cols) /
++                 (rootStats.simTicks);
++
+     // Links
+-    m_total_ext_in_link_utilization
+-        .name(name() + ".ext_in_link_utilization");
++    m_total_ext_in_link_utilization.name(name() + ".ext_in_link_utilization");
+     m_total_ext_out_link_utilization
+         .name(name() + ".ext_out_link_utilization");
+     m_total_int_link_utilization
+diff --git a/src/mem/ruby/network/garnet/GarnetNetwork.hh b/src/mem/ruby/network/garnet/GarnetNetwork.hh
+index db37628bea..38cd987614 100644
+--- a/src/mem/ruby/network/garnet/GarnetNetwork.hh
++++ b/src/mem/ruby/network/garnet/GarnetNetwork.hh
+@@ -199,6 +199,7 @@ class GarnetNetwork : public Network
+
+     statistics::Scalar  m_total_hops;
+     statistics::Formula m_avg_hops;
++    statistics::Formula recep_rate;
+
+     std::vector<std::vector<statistics::Scalar *>> m_data_traffic_distribution;
+     std::vector<std::vector<statistics::Scalar *>> m_ctrl_traffic_distribution;
+diff --git a/src/mem/ruby/network/garnet/GarnetNetwork.py b/src/mem/ruby/network/garnet/GarnetNetwork.py
+index 128118309c..b46fe9f076 100644
+--- a/src/mem/ruby/network/garnet/GarnetNetwork.py
++++ b/src/mem/ruby/network/garnet/GarnetNetwork.py
+@@ -45,7 +45,9 @@ class GarnetNetwork(RubyNetwork):
+     vcs_per_vnet = Param.UInt32(4, "virtual channels per virtual network")
+     buffers_per_data_vc = Param.UInt32(4, "buffers per data virtual channel")
+     buffers_per_ctrl_vc = Param.UInt32(1, "buffers per ctrl virtual channel")
+-    routing_algorithm = Param.Int(0, "0: Weight-based Table, 1: XY, 2: Custom")
++    routing_algorithm = Param.Int(
++        0, "0: Weight-based Table, 1: XY, 2: Custom, 3: Ring"
++    )
+     enable_fault_model = Param.Bool(False, "enable network fault model")
+     fault_model = Param.FaultModel(NULL, "network fault model")
+     garnet_deadlock_threshold = Param.UInt32(
+diff --git a/src/mem/ruby/network/garnet/RoutingUnit.cc b/src/mem/ruby/network/garnet/RoutingUnit.cc
+index f6075fb651..814b8cf804 100644
+--- a/src/mem/ruby/network/garnet/RoutingUnit.cc
++++ b/src/mem/ruby/network/garnet/RoutingUnit.cc
+@@ -191,6 +191,10 @@ RoutingUnit::outportCompute(RouteInfo route, int inport,
+         case XY_:     outport =
+             outportComputeXY(route, inport, inport_dirn); break;
+         // any custom algorithm
++        case RING_:
++        outport =
++            outportComputeRing(route, inport, inport_dirn);
++        break;
+         case CUSTOM_: outport =
+             outportComputeCustom(route, inport, inport_dirn); break;
+         default: outport =
+@@ -260,6 +264,32 @@ RoutingUnit::outportComputeXY(RouteInfo route,
+     return m_outports_dirn2idx[outport_dirn];
+ }
+
++// Routing for Ring (1d torus)
++// Find the nearest direction
++int RoutingUnit::outportComputeRing(RouteInfo route, int inport,
++                                    PortDirection inport_dirn) {
++    PortDirection outport_dirn = "Unknown";
++
++    int num_routers = m_router->get_net_ptr()->getNumRouters();
++    assert(num_routers > 0);
++
++    int my_id = m_router->get_id();
++
++    int dest_id = route.dest_router;
++
++    int distance = (dest_id - my_id + num_routers) % num_routers;
++
++    if (distance <= (num_routers / 2))
++    {
++        outport_dirn = "East";
++    }
++    else
++    {
++        outport_dirn = "West";
++    }
++    return m_outports_dirn2idx[outport_dirn];
++}
++
+ // Template for implementing custom routing algorithm
+ // using port directions. (Example adaptive)
+ int
+diff --git a/src/mem/ruby/network/garnet/RoutingUnit.hh b/src/mem/ruby/network/garnet/RoutingUnit.hh
+index e593afd080..c66a8a4920 100644
+--- a/src/mem/ruby/network/garnet/RoutingUnit.hh
++++ b/src/mem/ruby/network/garnet/RoutingUnit.hh
+@@ -73,6 +73,10 @@ class RoutingUnit
+                          int inport,
+                          PortDirection inport_dirn);
+
++    // Routing for Ring (1d torus)
++    int outportComputeRing(RouteInfo route, int inport,
++                           PortDirection inport_dirn);
++
+     // Custom Routing Algorithm using Port Directions
+     int outportComputeCustom(RouteInfo route,
+                              int inport,
+--
+2.25.1
