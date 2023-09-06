@@ -41,6 +41,7 @@
 #include "mem/ruby/network/BasicRouter.hh"
 #include "mem/ruby/network/garnet/CommonTypes.hh"
 #include "mem/ruby/network/garnet/CrossbarSwitch.hh"
+#include "mem/ruby/network/garnet/FSM/FSM.hh"
 #include "mem/ruby/network/garnet/GarnetNetwork.hh"
 #include "mem/ruby/network/garnet/RoutingUnit.hh"
 #include "mem/ruby/network/garnet/SwitchAllocator.hh"
@@ -90,7 +91,7 @@ class Router : public BasicRouter, public Consumer
     int get_num_outports()  { return m_output_unit.size(); }
     int get_id()            { return m_id; }
     int get_wormhole() { return wormhole; }
-
+    fsm::SpinFSM *const getSpinFSM() { return &spinFSM; }
     void init_net_ptr(GarnetNetwork* net_ptr)
     {
         m_network_ptr = net_ptr;
@@ -149,6 +150,7 @@ class Router : public BasicRouter, public Consumer
     uint32_t m_bit_width;
     GarnetNetwork *m_network_ptr;
     uint32_t wormhole;
+    fsm::SpinFSM spinFSM;
 
     RoutingUnit routingUnit;
     SwitchAllocator switchAllocator;

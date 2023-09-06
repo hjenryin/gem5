@@ -90,6 +90,8 @@ InputUnit::wakeup()
         int vc = t_flit->get_vc();
         t_flit->increment_hops(); // for stats
 
+        m_router->getSpinFSM()->flitArrive(m_id, t_flit->get_vc(), curTick());
+
         if ((t_flit->get_type() == HEAD_) ||
             (t_flit->get_type() == HEAD_TAIL_)) {
 

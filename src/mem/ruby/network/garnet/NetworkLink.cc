@@ -102,7 +102,7 @@ NetworkLink::wakeup()
         link_consumer->scheduleEventAbsolute(clockEdge(m_latency));
         m_link_utilized++;
         m_vc_load[t_flit->get_vc()]++;
-    }
+        }
 
     if (!link_srcQueue->isEmpty()) {
         scheduleEvent(Cycles(1));
