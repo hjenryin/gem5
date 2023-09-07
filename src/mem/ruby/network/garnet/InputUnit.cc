@@ -35,6 +35,7 @@
 #include "debug/RubyNetwork.hh"
 #include "mem/ruby/network/garnet/Credit.hh"
 #include "mem/ruby/network/garnet/Router.hh"
+#include "mem/ruby/network/garnet/Spin/SpinMessage.hh"
 
 namespace gem5
 {
@@ -83,63 +84,75 @@ InputUnit::wakeup()
     if (m_in_link->isReady(curTick())) {
 
         t_flit = m_in_link->consumeLink();
-        DPRINTF(RubyNetwork, "Router[%d] Consuming:%s Width: %d Flit:%s\n",
-        m_router->get_id(), m_in_link->name(),
-        m_router->getBitWidth(), *t_flit);
-        assert(t_flit->m_width == m_router->getBitWidth());
-        int vc = t_flit->get_vc();
-        t_flit->increment_hops(); // for stats
 
-        m_router->getSpinFSM()->flitArrive(m_id, t_flit->get_vc(), curTick());
+        if (dynamic_cast<spin::SpinMessage *>(t_flit) == NULL) {
+            // regular flit; proceed as usual
+            DPRINTF(RubyNetwork, "Router[%d] Consuming:%s Width: %d Flit:%s\n",
+                    m_router->get_id(), m_in_link->name(),
+                    m_router->getBitWidth(), *t_flit);
+            assert(t_flit->m_width == m_router->getBitWidth());
+            int vc = t_flit->get_vc();
+            t_flit->increment_hops(); // for stats
 
-        if ((t_flit->get_type() == HEAD_) ||
-            (t_flit->get_type() == HEAD_TAIL_)) {
+            m_router->getSpinFSM()->flitArrive(t_flit, m_id, t_flit->get_vc(),
+                                               curTick());
 
-            assert(!virtualChannels[vc].isFull());
-            set_vc_active(vc, curTick());
+            if ((t_flit->get_type() == HEAD_) ||
+                (t_flit->get_type() == HEAD_TAIL_)) {
 
-            // Route computation for this vc
-            int outport = m_router->route_compute(t_flit->get_route(),
-                m_id, m_direction);
+                assert(!virtualChannels[vc].isFull());
+                set_vc_active(vc, curTick());
 
-            // Update output port in VC
-            // All flits in this packet will use this output port
-            // The output port field in the flit is updated after it wins SA
-            grant_outport(vc, outport);
+                // Route computation for this vc
+                int outport = m_router->route_compute(t_flit->get_route(),
+                                                      m_id, m_direction);
 
+                // Update output port in VC
+                // All flits in this packet will use this output port
+                // The output port field in the flit is updated after it wins
+                // SA
+                grant_outport(vc, outport);
+
+            } else {
+                assert(virtualChannels[vc].get_state_size() > 0);
+            }
+
+            // Buffer the flit
+            virtualChannels[vc].insertFlit(t_flit);
+
+            int vnet = vc / m_vc_per_vnet;
+            // number of writes same as reads
+            // any flit that is written will be read only once
+            m_num_buffer_writes[vnet]++;
+            m_num_buffer_reads[vnet]++;
+
+            Cycles pipe_stages = m_router->get_pipe_stages();
+            if (pipe_stages == 1) {
+                // 1-cycle router
+                // Flit goes for SA directly
+                t_flit->advance_stage(SA_, curTick());
+            } else {
+                assert(pipe_stages > 1);
+                // Router delay is modeled by making flit wait in buffer for
+                // (pipe_stages cycles - 1) cycles before going for SA
+
+                Cycles wait_time = pipe_stages - Cycles(1);
+                t_flit->advance_stage(SA_, m_router->clockEdge(wait_time));
+
+                // Wakeup the router in that cycle to perform SA
+                m_router->schedule_wakeup(Cycles(wait_time));
+            }
+
+            if (m_in_link->isReady(curTick())) {
+                m_router->schedule_wakeup(Cycles(1));
+            }
         } else {
-            assert(virtualChannels[vc].get_state_size() > 0);
-        }
-
-
-        // Buffer the flit
-        virtualChannels[vc].insertFlit(t_flit);
-
-        int vnet = vc/m_vc_per_vnet;
-        // number of writes same as reads
-        // any flit that is written will be read only once
-        m_num_buffer_writes[vnet]++;
-        m_num_buffer_reads[vnet]++;
-
-        Cycles pipe_stages = m_router->get_pipe_stages();
-        if (pipe_stages == 1) {
-            // 1-cycle router
-            // Flit goes for SA directly
-            t_flit->advance_stage(SA_, curTick());
-        } else {
-            assert(pipe_stages > 1);
-            // Router delay is modeled by making flit wait in buffer for
-            // (pipe_stages cycles - 1) cycles before going for SA
-
-            Cycles wait_time = pipe_stages - Cycles(1);
-            t_flit->advance_stage(SA_, m_router->clockEdge(wait_time));
-
-            // Wakeup the router in that cycle to perform SA
-            m_router->schedule_wakeup(Cycles(wait_time));
-        }
-
-        if (m_in_link->isReady(curTick())) {
-            m_router->schedule_wakeup(Cycles(1));
+            spin::SpinMessage *t_spin_msg =
+                dynamic_cast<spin::SpinMessage *>(t_flit);
+            // DPRINTF(Lab3, "Router[%d] Consuming:%s Width: %d Flit:%s\n",
+            //         m_router->get_id(), m_in_link->name(),
+            //         m_router->getBitWidth(), *t_spinmsg);
+            m_router->getSpinFSM()->
         }
     }
 }

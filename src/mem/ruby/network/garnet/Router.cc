@@ -77,6 +77,7 @@ Router::wakeup()
     for (int inport = 0; inport < m_input_unit.size(); inport++) {
         m_input_unit[inport]->wakeup();
     }
+    spinFSM.wakeup();
 
     // check for incoming credits
     // Note: the credit update is happening before SA

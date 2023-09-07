@@ -38,6 +38,7 @@
 
 #include "mem/ruby/common/Consumer.hh"
 #include "mem/ruby/network/garnet/CommonTypes.hh"
+#include "mem/ruby/network/garnet/Spin/SpinMessage.hh"
 #include "mem/ruby/network/garnet/flitBuffer.hh"
 #include "params/NetworkLink.hh"
 #include "sim/clocked_object.hh"
@@ -87,6 +88,7 @@ class NetworkLink : public ClockedObject, public Consumer
 
     std::vector<int> mVnets;
     uint32_t bitWidth;
+    void pushSpinMessage(spin::SpinMessage *sm);
 
   private:
     const int m_id;

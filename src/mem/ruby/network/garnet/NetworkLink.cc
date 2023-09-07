@@ -109,9 +109,7 @@ NetworkLink::wakeup()
     }
 }
 
-void
-NetworkLink::resetStats()
-{
+void NetworkLink::resetStats() {
     for (int i = 0; i < m_vc_load.size(); i++) {
         m_vc_load[i] = 0;
     }
@@ -119,16 +117,26 @@ NetworkLink::resetStats()
     m_link_utilized = 0;
 }
 
-bool
-NetworkLink::functionalRead(Packet *pkt, WriteMask &mask)
-{
+bool NetworkLink::functionalRead(Packet *pkt, WriteMask &mask) {
     return linkBuffer.functionalRead(pkt, mask);
 }
 
-uint32_t
-NetworkLink::functionalWrite(Packet *pkt)
-{
+uint32_t NetworkLink::functionalWrite(Packet *pkt) {
     return linkBuffer.functionalWrite(pkt);
+}
+
+void NetworkLink::pushSpinMessage(spin::SpinMessage *sm) {
+    auto flit = linkBuffer.peekTopFlit();
+    auto cast_flit = dynamic_cast<spin::SpinMessage *>(flit);
+    assert(flit == NULL || cast_flit != NULL);
+    // Either there's no flit in the link buffer, or it's a spin message.
+
+    // Priority: To be handled.
+
+    sm->set_time(clockEdge(m_latency));
+    linkBuffer.insert(sm);
+    link_consumer->scheduleEventAbsolute(clockEdge(m_latency));
+    m_link_utilized++;
 }
 
 } // namespace garnet

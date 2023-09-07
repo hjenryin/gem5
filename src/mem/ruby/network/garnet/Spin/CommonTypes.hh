@@ -10,7 +10,9 @@ namespace ruby {
 
 namespace garnet {
 
-namespace fsm {
+namespace spin {
+const int TDD = 100;
+
 enum FSMState
 {
     OFF,
@@ -21,7 +23,10 @@ enum FSMState
     FW_PROGRESS,
     FROZEN
 };
-} // namespace fsm
+enum SpinMessageType
+{
+    PROBE_MSG, MOVE_MSG, KILL_MOVE_MSG, PROBE_MOVE_MSG };
+} // namespace spin
 } // namespace garnet
 } // namespace ruby
 } // namespace gem5
