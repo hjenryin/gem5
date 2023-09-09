@@ -95,7 +95,7 @@ Router::wakeup()
     // Switch Traversal
     crossbarSwitch.wakeup();
 
-    spinFSM.wakeup();
+    // spinFSM.wakeup();
 }
 
 void

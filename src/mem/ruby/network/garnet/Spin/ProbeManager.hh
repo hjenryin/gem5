@@ -12,12 +12,17 @@ namespace spin {
 class ProbeManager
 {
   private:
-    Router *router;
+    SpinFSM *fsm;
 
   public:
-    ProbeManager(Router *router);
-    void send(SpinMessage *message, int port);
-    void forward(SpinMessage *message, int port);
+    ProbeManager(SpinFSM *fsm);
+    void sendNewProbe(int port);
+    void handleMessage(SpinMessage *message, int port, bool from_self);
+
+  private:
+    int get_sender_id() { return fsm->get_router()->get_id(); }
+    bool test_outport(int inport, int invc, int outport);
+    bool test_inport(int inport);
 };
 } // namespace spin
 } // namespace garnet

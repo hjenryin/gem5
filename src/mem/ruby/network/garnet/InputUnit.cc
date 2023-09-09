@@ -94,8 +94,7 @@ InputUnit::wakeup()
             int vc = t_flit->get_vc();
             t_flit->increment_hops(); // for stats
 
-            m_router->getSpinFSM()->flitArrive(t_flit, m_id, t_flit->get_vc(),
-                                               curTick());
+            m_router->getSpinFSM()->flitArrive(t_flit, m_id, t_flit->get_vc());
 
             if ((t_flit->get_type() == HEAD_) ||
                 (t_flit->get_type() == HEAD_TAIL_)) {
@@ -149,10 +148,8 @@ InputUnit::wakeup()
         } else {
             spin::SpinMessage *t_spin_msg =
                 dynamic_cast<spin::SpinMessage *>(t_flit);
-            // DPRINTF(Lab3, "Router[%d] Consuming:%s Width: %d Flit:%s\n",
-            //         m_router->get_id(), m_in_link->name(),
-            //         m_router->getBitWidth(), *t_spinmsg);
-            m_router->getSpinFSM()->
+            m_router->getSpinFSM()->registerSpinMessage(t_spin_msg, m_id,
+                                                        curTick());
         }
     }
 }

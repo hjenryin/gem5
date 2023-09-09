@@ -36,6 +36,7 @@
 #include "mem/ruby/network/garnet/InputUnit.hh"
 #include "mem/ruby/network/garnet/OutputUnit.hh"
 #include "mem/ruby/network/garnet/Router.hh"
+#include "mem/ruby/network/garnet/Spin/SpinMessage.hh"
 
 namespace gem5
 {
@@ -166,6 +167,17 @@ SwitchAllocator::arbitrate_outports()
     // Again do round robin arbitration on these requests
     // Independent arbiter at each output port
     for (int outport = 0; outport < m_num_outports; outport++) {
+
+        // check if a spin message occupies the link
+        auto OU = m_router->getOutputUnit(outport);
+        if (OU->get_out_link()->isReady(curTick())) {
+            auto linkFlit = OU->get_out_link()->peekLink();
+            assert(linkFlit != NULL &&
+                   dynamic_cast<spin::SpinMessage *>(linkFlit) != NULL);
+            continue;
+        } // BUT a spin message will be gone the next cycle when the flit goes
+          // to link!
+
         int inport = m_round_robin_inport[outport];
 
         for (int inport_iter = 0; inport_iter < m_num_inports;

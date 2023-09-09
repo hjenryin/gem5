@@ -10,7 +10,15 @@ namespace spin {
 class MoveManager
 {
   public:
-    void handleMessage(SpinMessage *msg, int inport);
+    MoveManager(SpinFSM *fsm) : fsm(fsm) {}
+    void handleMessage(SpinMessage *msg, int inport, bool from_self);
+    void sendMove(LoopBuffer path);
+    void sendKillMove(LoopBuffer path);
+    void sendProbeMove(LoopBuffer path);
+
+  private:
+    int get_sender_id() { return fsm->get_router()->get_id(); }
+    SpinFSM *fsm;
 };
 } // namespace spin
 } // namespace garnet

@@ -84,6 +84,8 @@ class OutputUnit : public Consumer
         return m_out_link->get_id();
     }
 
+    inline NetworkLink *get_out_link() { return m_out_link; }
+
     inline bool is_vc_avail(int vc, Tick curTime) {
         return !outVcState[vc].isFull(curTime);
     }
