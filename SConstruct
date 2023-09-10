@@ -189,8 +189,10 @@ gem5_scons.patch_re_compile_for_inline_flags()
 
 main = Environment(tools=[
         'default', 'git', TempFileSpawn, EnvDefaults, MakeActionTool,
-        ConfigFile, AddLocalRPATH, SwitchingHeaders, TagImpliesTool, Blob
+        ConfigFile, AddLocalRPATH, SwitchingHeaders, TagImpliesTool, Blob,
     ])
+
+main.Append(CPPFLAGS=['-Wno-reorder','-Wno-deprecated-declarations'])
 
 main.Tool(SCons.Tool.FindTool(['gcc', 'clang'], main))
 main.Tool(SCons.Tool.FindTool(['g++', 'clang++'], main))

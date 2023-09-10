@@ -130,7 +130,9 @@ SwitchAllocator::arbitrate_inports()
                 bool make_request =
                     send_allowed(inport, invc, outport, outvc);
 
-                if (make_request) {
+                bool is_frozen = input_unit->isFrozen(invc);
+
+                if (make_request && !is_frozen) {
                     m_input_arbiter_activity++;
                     m_port_requests[inport] = outport;
                     m_vc_winners[inport] = invc;
@@ -169,14 +171,15 @@ SwitchAllocator::arbitrate_outports()
     for (int outport = 0; outport < m_num_outports; outport++) {
 
         // check if a spin message occupies the link
-        auto OU = m_router->getOutputUnit(outport);
-        if (OU->get_out_link()->isReady(curTick())) {
-            auto linkFlit = OU->get_out_link()->peekLink();
-            assert(linkFlit != NULL &&
-                   dynamic_cast<spin::SpinMessage *>(linkFlit) != NULL);
-            continue;
-        } // BUT a spin message will be gone the next cycle when the flit goes
-          // to link!
+        // auto OU = m_router->getOutputUnit(outport);
+        // if (OU->get_out_link()->isReady(curTick())) {
+        //     auto linkFlit = OU->get_out_link()->peekLink();
+        //     assert(linkFlit != NULL &&
+        //            dynamic_cast<spin::SpinMessage *>(linkFlit) != NULL);
+        //     continue;
+        // } // BUT a spin message will be gone the next cycle when the flit
+        // goes
+        //   // to link!
 
         int inport = m_round_robin_inport[outport];
 

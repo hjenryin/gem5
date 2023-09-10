@@ -33,7 +33,9 @@
 #define __MEM_RUBY_NETWORK_GARNET_0_ROUTER_HH__
 
 #include <iostream>
+#include <map>
 #include <memory>
+#include <tuple>
 #include <vector>
 
 #include "mem/ruby/common/Consumer.hh"
@@ -91,7 +93,7 @@ class Router : public BasicRouter, public Consumer
     int get_num_outports()  { return m_output_unit.size(); }
     int get_id()            { return m_id; }
     int get_wormhole() { return wormhole; }
-    spin::SpinFSM *const getSpinFSM() { return &spinFSM; }
+    spin::SpinFSM *getSpinFSM() { return &spinFSM; }
     void init_net_ptr(GarnetNetwork* net_ptr)
     {
         m_network_ptr = net_ptr;
@@ -118,6 +120,12 @@ class Router : public BasicRouter, public Consumer
     PortDirection getOutportDirection(int outport);
     PortDirection getInportDirection(int inport);
 
+    int find_vc_waiting_outport(int inport, int outport);
+    void toggle_freeze_vc(bool freeze, int inport = -1, int vc = -1,
+                          int outport = -1);
+    void spin_frozen_flit();
+    int get_frozen_vc(int inport) { return frozens.get_vc(inport); }
+
     int route_compute(RouteInfo route, int inport, PortDirection direction);
     void grant_switch(int inport, flit *t_flit);
     void schedule_wakeup(Cycles time);
@@ -143,8 +151,10 @@ class Router : public BasicRouter, public Consumer
 
     bool functionalRead(Packet *pkt, WriteMask &mask);
     uint32_t functionalWrite(Packet *);
+    static int get_total_num_routers() { return total_num_routers; }
 
   private:
+    static int total_num_routers; // Magic share!
     Cycles m_latency;
     uint32_t m_virtual_networks, m_vc_per_vnet, m_num_vcs;
     uint32_t m_bit_width;
@@ -155,6 +165,36 @@ class Router : public BasicRouter, public Consumer
     RoutingUnit routingUnit;
     SwitchAllocator switchAllocator;
     CrossbarSwitch crossbarSwitch;
+
+    class Frozens : protected std::map<int, std::pair<int, int>>
+    {
+      public:
+        void push(int inport, int vc, int outport) {
+            (*this)[inport] = std::make_pair(vc, outport);
+        }
+        void clear() { std::map<int, std::pair<int, int>>::clear(); }
+        int get_vc(int inport) {
+            if (find(inport) == end())
+                return -1;
+            return (*this)[inport].first;
+        }
+        int get_outport(int inport) {
+            if (find(inport) == end())
+                return -1;
+            return (*this)[inport].second;
+        }
+        /**
+         * @return inport, vc, outport
+         */
+        std::tuple<int, int, int> pop() {
+            auto it = begin();
+            auto ret = std::make_tuple(it->first, it->second.first,
+                                       it->second.second);
+            erase(it);
+            return ret;
+        }
+        bool empty() { return std::map<int, std::pair<int, int>>::empty(); }
+    } frozens;
 
     std::vector<std::shared_ptr<InputUnit>> m_input_unit;
     std::vector<std::shared_ptr<OutputUnit>> m_output_unit;

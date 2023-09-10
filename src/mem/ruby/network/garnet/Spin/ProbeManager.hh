@@ -9,6 +9,7 @@ namespace ruby {
 namespace garnet {
 
 namespace spin {
+class SpinFSM;
 class ProbeManager
 {
   private:
@@ -16,13 +17,12 @@ class ProbeManager
 
   public:
     ProbeManager(SpinFSM *fsm);
-    void sendNewProbe(int port);
-    void handleMessage(SpinMessage *message, int port, bool from_self);
+    void sendNewProbe(int port, int watch_inport);
+    bool handleProbe(SpinMessage *message, int inport, bool from_self);
 
   private:
-    int get_sender_id() { return fsm->get_router()->get_id(); }
+    int get_router_id();
     bool test_outport(int inport, int invc, int outport);
-    bool test_inport(int inport);
 };
 } // namespace spin
 } // namespace garnet

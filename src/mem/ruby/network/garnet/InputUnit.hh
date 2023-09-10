@@ -158,6 +158,10 @@ class InputUnit : public Consumer
     uint32_t functionalWrite(Packet *pkt);
 
     void resetStats();
+    void setFrozen(bool freeze, int vc) {
+        virtualChannels[vc].frozen = freeze;
+    }
+    bool isFrozen(int vc) { return virtualChannels[vc].frozen; }
 
   private:
     Router *m_router;

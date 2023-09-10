@@ -7,6 +7,7 @@ namespace gem5 {
 namespace ruby {
 namespace garnet {
 namespace spin {
+class SpinFSM;
 class MoveManager
 {
   public:
@@ -17,7 +18,7 @@ class MoveManager
     void sendProbeMove(LoopBuffer path);
 
   private:
-    int get_sender_id() { return fsm->get_router()->get_id(); }
+    int get_router_id();
     SpinFSM *fsm;
 };
 } // namespace spin

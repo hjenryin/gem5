@@ -101,6 +101,8 @@ class VirtualChannel
     bool functionalRead(Packet *pkt, WriteMask &mask);
     uint32_t functionalWrite(Packet *pkt);
 
+    bool frozen;
+
   private:
     flitBuffer inputBuffer;
     struct VC_state_meta

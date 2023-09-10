@@ -47,13 +47,16 @@ namespace ruby
 
 namespace garnet
 {
-
+int Router::total_num_routers = 0;
 Router::Router(const Params &p)
     : BasicRouter(p), Consumer(this), m_latency(p.latency),
       m_virtual_networks(p.virt_nets), m_vc_per_vnet(p.vcs_per_vnet),
       m_num_vcs(m_virtual_networks * m_vc_per_vnet), m_bit_width(p.width),
       m_network_ptr(nullptr), routingUnit(this), switchAllocator(this),
       crossbarSwitch(this), wormhole(p.wormhole), spinFSM(this) {
+    if (p.router_id >= total_num_routers) {
+        total_num_routers = p.router_id + 1;
+    }
     m_input_unit.clear();
     m_output_unit.clear();
 }
@@ -187,6 +190,50 @@ Router::getPortDirectionName(PortDirection direction)
     // statement to convert direction to a string
     // that can be printed out
     return direction;
+}
+
+int Router::find_vc_waiting_outport(int inport, int outport) {
+    InputUnit *input_unit = getInputUnit(inport);
+    for (int vc = 0; vc < m_vc_per_vnet; vc++) {
+        flit *t_flit = input_unit->peekTopFlit(vc);
+        if (t_flit != nullptr && t_flit->get_outport() == outport) {
+            return vc;
+        }
+    }
+    return -1;
+}
+
+void Router::toggle_freeze_vc(bool freeze, int inport, int vc, int outport) {
+    if (freeze) {
+        assert(!frozens.empty());
+        assert(inport != -1 && vc != -1 && outport != -1);
+        frozens.push(inport, vc, outport);
+        InputUnit *input_unit = getInputUnit(inport);
+        input_unit->setFrozen(true, vc);
+    } else {
+        assert(inport == -1 && vc == -1 && outport == -1);
+        while (!frozens.empty()) {
+            auto [inport, vc, outport] = frozens.pop();
+            InputUnit *input_unit = getInputUnit(inport);
+            input_unit->setFrozen(false, vc);
+        }
+    }
+}
+
+void Router::spin_frozen_flit() {
+    assert(!frozens.empty());
+    while (!frozens.empty()) {
+        auto [inport, vc, outport] = frozens.pop();
+        InputUnit *input_unit = getInputUnit(inport);
+        // remove the flit from input buffer
+        flit *t_flit = input_unit->getTopFlit(vc);
+        t_flit->set_outport(outport);
+        t_flit->set_vc(-1); // signals spinned flit
+        // perform link traversal **immediately**
+        t_flit->advance_stage(LT_, clockEdge(Cycles(0)));
+        t_flit->set_time(clockEdge(Cycles(0)));
+        getOutputUnit(outport)->insert_flit(t_flit);
+    }
 }
 
 void

@@ -2,8 +2,6 @@
 #ifndef __MEM_RUBY_NETWORK_GARNET_0_FSM_COMMONTYPES_HH__
 #define __MEM_RUBY_NETWORK_GARNET_0_FSM_COMMONTYPES_HH__
 
-#include "mem/ruby/common/NetDest.hh"
-
 namespace gem5 {
 
 namespace ruby {
@@ -23,9 +21,8 @@ enum FSMState
     FW_PROGRESS,
     FROZEN
 };
-enum SpinMessageType
-{
-    PROBE_MSG, MOVE_MSG, KILL_MOVE_MSG, PROBE_MOVE_MSG };
+enum SpinMessageType { PROBE_MSG, MOVE_MSG, PROBE_MOVE_MSG, KILL_MOVE_MSG };
+// Order of the messages determines the priority of the messages
 } // namespace spin
 } // namespace garnet
 } // namespace ruby

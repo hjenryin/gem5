@@ -35,6 +35,7 @@
 #include "debug/RubyNetwork.hh"
 #include "mem/ruby/network/garnet/Credit.hh"
 #include "mem/ruby/network/garnet/Router.hh"
+#include "mem/ruby/network/garnet/Spin/CommonTypes.hh"
 #include "mem/ruby/network/garnet/Spin/SpinMessage.hh"
 
 namespace gem5
@@ -92,6 +93,12 @@ InputUnit::wakeup()
                     m_router->getBitWidth(), *t_flit);
             assert(t_flit->m_width == m_router->getBitWidth());
             int vc = t_flit->get_vc();
+            if (vc == -1) { // a flit pushed in by a spin
+                vc = m_router->get_frozen_vc(m_id);
+                assert(vc != -1);
+                t_flit->set_vc(vc);
+                assert(m_router->getSpinFSM()->get_spinning());
+            }
             t_flit->increment_hops(); // for stats
 
             m_router->getSpinFSM()->flitArrive(t_flit, m_id, t_flit->get_vc());

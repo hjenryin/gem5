@@ -23,17 +23,19 @@ class SpinFSM : public Consumer
     void flitArrive(flit *flit, int inport, int vc);
     void wakeup() override;
     void print(std::ostream &out) const override {}
-    void schedule_wakeup(Cycles time) {
-        // wake up after time cycles
-        scheduleEvent(time);
-    }
+
     void flitLeave(flit *flit);
     void registerSpinMessage(SpinMessage *msg, int inport, Tick time);
     void processSpinMessage();
     FSMState get_state() { return m_state; }
-    Router *const get_router() { return m_router; }
+    Router *get_router() { return m_router; }
     void sendMessage(SpinMessage *msg, int outport);
     void setLoopBuf(LoopBuffer buf) { loopBuf = buf; }
+    bool get_spinning() { return spinning; }
+    int get_counter_inport() { return inport; }
+    int set_current_sender_ID(int id) { return sender_id = id; }
+    int get_current_sender_ID() { return sender_id; }
+    static int getCurrentPriority(int sender_id);
 
   protected:
     ProbeManager probeMan;
@@ -51,21 +53,26 @@ class SpinFSM : public Consumer
     Cycles currentTimeoutLimit;
     void checkTimeout();
     void reset_counter(Cycles c);
-    void init();
+    flit *roundRobinInVC(int &inport, int &invc);
     void re_init();
-    void stop_counter();
-    void spin_complete(); // after spin complete, transition to DL_DETECT or
-                          // OFF depending on active VC
+    void pushSpin();
 
     struct MSGStore
     {
         SpinMessage *msg;
         int inport;
         MSGStore() : msg(NULL), inport(-1) {}
+        void clear() {
+            msg = NULL;
+            inport = -1;
+        }
     } msg_store;
     int sender_id;
+    void reset_is_deadlock();
     bool is_deadlock;
     Cycles curCycles() { return getCycles(curTick()); }
+    bool spinning = false;
+    Cycles latest_cycle_debug;
 };
 } // namespace spin
 } // namespace garnet
