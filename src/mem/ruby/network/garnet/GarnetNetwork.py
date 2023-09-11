@@ -86,3 +86,5 @@ class GarnetRouter(BasicRouter):
         Parent.ni_flit_size, "bit width supported by the router"
     )
     wormhole = Param.UInt32(0, "0: disable, otherwise: the depth of each VC")
+    spin_enabled = Param.Bool(False, "enable spin")
+    num_total = Param.UInt32(0, "total number of routers")

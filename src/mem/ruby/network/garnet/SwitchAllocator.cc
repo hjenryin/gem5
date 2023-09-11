@@ -169,6 +169,9 @@ SwitchAllocator::arbitrate_outports()
     // Again do round robin arbitration on these requests
     // Independent arbiter at each output port
     for (int outport = 0; outport < m_num_outports; outport++) {
+        // if (m_router->getSpinFSM()->test_outport_used(outport)) {
+        //     continue;
+        // }
 
         // check if a spin message occupies the link
         // auto OU = m_router->getOutputUnit(outport);
@@ -177,8 +180,8 @@ SwitchAllocator::arbitrate_outports()
         //     assert(linkFlit != NULL &&
         //            dynamic_cast<spin::SpinMessage *>(linkFlit) != NULL);
         //     continue;
-        // } // BUT a spin message will be gone the next cycle when the flit
-        // goes
+        // } // BUT a spin message will be gone the next cycle when the
+        // flit goes
         //   // to link!
 
         int inport = m_round_robin_inport[outport];

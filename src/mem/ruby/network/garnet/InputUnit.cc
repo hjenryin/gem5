@@ -77,12 +77,13 @@ InputUnit::InputUnit(int id, PortDirection direction, Router *router)
  * and marked as valid for SwitchAllocation starting that cycle.
  *
  */
-
 void
 InputUnit::wakeup()
 {
     flit *t_flit;
-    if (m_in_link->isReady(curTick())) {
+    int msg_count = 0;
+    while (m_in_link->isReady(curTick())) {
+        count += 1;
 
         t_flit = m_in_link->consumeLink();
 

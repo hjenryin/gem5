@@ -1,5 +1,7 @@
 #ifndef __MEM_RUBY_NETWORK_GARNET_0_FSM_FSM_HH__
 #define __MEM_RUBY_NETWORK_GARNET_0_FSM_FSM_HH__
+#include <set>
+
 #include "mem/ruby/common/Consumer.hh"
 #include "mem/ruby/network/garnet/Spin/CommonTypes.hh"
 #include "mem/ruby/network/garnet/Spin/LoopBuffer.hh"
@@ -15,14 +17,13 @@ class Router;
 
 namespace spin {
 
-class SpinFSM : public Consumer
+class SpinFSM
 {
   public:
-    SpinFSM(Router *router);
+    SpinFSM(Router *router, bool spin_enabled);
 
     void flitArrive(flit *flit, int inport, int vc);
-    void wakeup() override;
-    void print(std::ostream &out) const override {}
+    void wakeup();
 
     void flitLeave(flit *flit);
     void registerSpinMessage(SpinMessage *msg, int inport, Tick time);
@@ -31,13 +32,18 @@ class SpinFSM : public Consumer
     Router *get_router() { return m_router; }
     void sendMessage(SpinMessage *msg, int outport);
     void setLoopBuf(LoopBuffer buf) { loopBuf = buf; }
+    LoopBuffer getLoopBuf() { return loopBuf; }
     bool get_spinning() { return spinning; }
     int get_counter_inport() { return inport; }
     int set_current_sender_ID(int id) { return sender_id = id; }
     int get_current_sender_ID() { return sender_id; }
     static int getCurrentPriority(int sender_id);
+    bool test_outport_used(int outport){
+      return msg_sent_this_cycle.find(outport) != msg_sent_this_cycle.end();
+    }
 
   protected:
+    bool spin_enabled;
     ProbeManager probeMan;
     MoveManager moveMan;
     LoopBuffer loopBuf;
@@ -61,18 +67,21 @@ class SpinFSM : public Consumer
     {
         SpinMessage *msg;
         int inport;
+
         MSGStore() : msg(NULL), inport(-1) {}
         void clear() {
             msg = NULL;
             inport = -1;
         }
     } msg_store;
+
     int sender_id;
     void reset_is_deadlock();
     bool is_deadlock;
     Cycles curCycles() { return getCycles(curTick()); }
     bool spinning = false;
     Cycles latest_cycle_debug;
+    std::set<int> msg_sent_this_cycle;
 };
 } // namespace spin
 } // namespace garnet

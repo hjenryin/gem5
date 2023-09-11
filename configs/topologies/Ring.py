@@ -30,7 +30,13 @@ class Ring(SimpleTopology):
 
         # Create the routers in the ring
         routers = [
-            Router(router_id=i, latency=router_latency)
+            Router(
+                router_id=i,
+                latency=router_latency,
+                wormhole=options.wormhole,
+                spin_enabled=options.spin_enabled,
+                num_total=num_routers,
+            )
             for i in range(num_routers)
         ]
         network.routers = routers

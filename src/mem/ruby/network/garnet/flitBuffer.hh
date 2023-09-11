@@ -81,8 +81,6 @@ class flitBuffer
         m_buffer.push_back(flt);
     }
 
-    void insertToHead(flit *flt) { m_buffer.push_front(flt); }
-
     bool functionalRead(Packet *pkt, WriteMask &mask);
     uint32_t functionalWrite(Packet *pkt);
 

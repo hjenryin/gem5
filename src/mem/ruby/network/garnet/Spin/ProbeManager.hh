@@ -21,6 +21,8 @@ class ProbeManager
     bool handleProbe(SpinMessage *message, int inport, bool from_self);
 
   private:
+    void sendMove(LoopBuffer path);
+
     int get_router_id();
     bool test_outport(int inport, int invc, int outport);
 };

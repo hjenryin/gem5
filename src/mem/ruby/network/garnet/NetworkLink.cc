@@ -127,8 +127,13 @@ uint32_t NetworkLink::functionalWrite(Packet *pkt) {
 
 void NetworkLink::pushSpinMessage(spin::SpinMessage *sm) {
     auto flit = linkBuffer.peekTopFlit();
-    if (flit != NULL) {
-        std::cout << "Link buffer is not empty." << std::endl;
+    if (flit != NULL && flit->get_time() == curTick() + 1) {
+        std::cout << "Link buffer is not empty. ";
+        if (dynamic_cast<spin::SpinMessage *>(flit) != NULL) {
+            std::cout << "Flit is a spin message." << std::endl;
+        } else {
+            std::cout << "Flit is not a spin message." << std::endl;
+        }
     }
     // auto cast_flit = dynamic_cast<spin::SpinMessage *>(flit);
     // assert(flit == NULL || cast_flit != NULL);
@@ -138,7 +143,7 @@ void NetworkLink::pushSpinMessage(spin::SpinMessage *sm) {
     // // Priority: To be handled.
 
     sm->set_time(clockEdge(m_latency));
-    linkBuffer.insertToHead(sm);
+    linkBuffer.insert(sm);
     link_consumer->scheduleEventAbsolute(clockEdge(m_latency));
     m_link_utilized++;
 }

@@ -20,9 +20,10 @@ class SpinMessage : public flit
     SpinMessage(LoopBuffer path, int sender_id)
         : flit(), path(path), sender_id(sender_id) {
         m_time = curTick();
+        m_size = 1;
     }
     LoopBuffer path;
-    int sender_id;
+    const int sender_id;
     virtual SpinMessageType get_msg_type() const = 0;
     bool operator<(const SpinMessage &rhs) const;
     virtual ~SpinMessage(){};
@@ -32,14 +33,22 @@ class ProbeMessage : public SpinMessage
 {
   public:
     ProbeMessage(int sender_id, int watch_inport)
-        : SpinMessage({}, sender_id), return_log({{watch_inport, 0}}) {}
-    ProbeMessage(const ProbeMessage &rhs) = default;
+        : SpinMessage({}, sender_id), return_log({{watch_inport, 0}}),
+          DEBUG_last_router(sender_id) {}
+    ProbeMessage(const ProbeMessage &rhs) : SpinMessage(rhs) {
+        return_log = rhs.return_log;
+        DEBUG_last_router = rhs.DEBUG_last_router;
+    }
     virtual SpinMessageType get_msg_type() const override { return PROBE_MSG; }
     ~ProbeMessage() override = default;
     bool return_path_ready(int inport);
+    void DEBUG_set_last_router(int router_id) {
+        DEBUG_last_router = router_id;
+    }
 
   protected:
     std::map<int, unsigned int> return_log;
+    int DEBUG_last_router;
 };
 class KillMoveMessage : public SpinMessage
 {
@@ -54,27 +63,21 @@ class KillMoveMessage : public SpinMessage
 class MoveMessage : public SpinMessage
 {
   public:
-    MoveMessage(int sender_id, LoopBuffer path, Cycles spin_time,
-                int first_outport)
-        : SpinMessage(path, sender_id), spin_time(spin_time),
-          first_outport(first_outport) {}
+    MoveMessage(int sender_id, LoopBuffer path, Cycles spin_time)
+        : SpinMessage(path, sender_id), spin_time(spin_time) {}
     virtual SpinMessageType get_msg_type() const override { return MOVE_MSG; }
     Cycles spin_time;
-    int first_outport;
     ~MoveMessage() override = default;
 };
 class ProbeMoveMessage : public SpinMessage
 {
   public:
-    ProbeMoveMessage(int sender_id, LoopBuffer path, Cycles spin_time,
-                     int first_outport)
-        : SpinMessage(path, sender_id), spin_time(spin_time),
-          first_outport(first_outport) {}
+    ProbeMoveMessage(int sender_id, LoopBuffer path, Cycles spin_time)
+        : SpinMessage(path, sender_id), spin_time(spin_time) {}
     virtual SpinMessageType get_msg_type() const override {
         return PROBE_MOVE_MSG;
     }
     Cycles spin_time;
-    int first_outport;
     ~ProbeMoveMessage() override = default;
 };
 

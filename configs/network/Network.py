@@ -126,6 +126,12 @@ def define_options(parser):
         default=0,
         help="0: disable, otherwise: the depth of each VC",
     )
+    parser.add_argument(
+        "--spin-enabled",
+        action="store_true",
+        default=False,
+        help="enable spin for garnet network",
+    )
 
 
 def create_network(options, ruby):

@@ -168,6 +168,7 @@ OutputUnit::set_credit_link(CreditLink *credit_link)
 void
 OutputUnit::insert_flit(flit *t_flit)
 {
+
     outBuffer.insert(t_flit);
     m_out_link->scheduleEventAbsolute(m_router->clockEdge(Cycles(1)));
 }

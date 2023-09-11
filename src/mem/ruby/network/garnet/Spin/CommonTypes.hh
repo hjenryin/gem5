@@ -21,7 +21,14 @@ enum FSMState
     FW_PROGRESS,
     FROZEN
 };
-enum SpinMessageType { PROBE_MSG, MOVE_MSG, PROBE_MOVE_MSG, KILL_MOVE_MSG };
+enum SpinMessageType
+{
+    UNNAMED,
+    PROBE_MSG,
+    MOVE_MSG,
+    PROBE_MOVE_MSG,
+    KILL_MOVE_MSG
+};
 // Order of the messages determines the priority of the messages
 } // namespace spin
 } // namespace garnet

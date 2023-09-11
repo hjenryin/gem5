@@ -35,7 +35,16 @@ void ProbeManager::sendNewProbe(int outport, int watch_inport) {
     fsm->sendMessage(message, outport);
     return;
 }
+/**
+ * @return int Sent outport Id.
+ */
+void ProbeManager::sendMove(LoopBuffer path) {
 
+    int tll = path.size();
+    int outport_id = path.pop_front();
+    auto msg = new MoveMessage(get_router_id(), path, Cycles(2 * tll - 1));
+    fsm->sendMessage(msg, outport_id);
+}
 /**
  * @brief Handles the probe message.
  *
@@ -50,24 +59,27 @@ void ProbeManager::sendNewProbe(int outport, int watch_inport) {
  */
 bool ProbeManager::handleProbe(SpinMessage *message, int inport,
                                bool from_self) {
+    message->set_time(curTick());
     assert(message->get_msg_type() == PROBE_MSG);
     ProbeMessage *in_msg = static_cast<ProbeMessage *>(message);
 
     if (from_self) {
         if (in_msg->return_path_ready(inport)) {
             // deadlock detected, transition to move and send move message
-            if (fsm->get_current_sender_ID() == -1) {
+            // also check there is still a vc waiting on first outport in path
+            int first_outport = in_msg->path.peek_front();
+            int vc = fsm->get_router()->find_vc_waiting_outport(inport,
+                                                                first_outport);
+            if (fsm->get_current_sender_ID() == -1 && vc != -1) {
                 assert(fsm->get_state() == MOVE || fsm->get_state() == FROZEN);
                 fsm->set_current_sender_ID(get_router_id());
-                int outport_id = message->path.pop_front();
-                MoveMessage *move_msg = new MoveMessage(
-                    get_router_id(), message->path,
-                    Cycles(2 * message->path.size()), outport_id);
-                fsm->sendMessage(move_msg, outport_id);
-                delete message;
+                sendMove(in_msg->path);
+                fsm->get_router()->toggle_freeze_vc(true, inport, vc,
+                                                    first_outport);
+                delete in_msg;
                 return true;
             } else {
-                delete message;
+                delete in_msg;
                 return false;
             }
         }
@@ -79,7 +91,7 @@ bool ProbeManager::handleProbe(SpinMessage *message, int inport,
     } else {
         // forward probe message
         int num_outports = fsm->get_router()->get_num_outports();
-        int num_vcs = fsm->get_router()->get_num_vcs();
+        int num_vcs = fsm->get_router()->get_vc_per_vnet();
         auto IU = fsm->get_router()->getInputUnit(inport);
         auto outportBools = new bool[num_outports];
         for (int outport = 0; outport < num_outports; outport++) {
@@ -96,12 +108,18 @@ bool ProbeManager::handleProbe(SpinMessage *message, int inport,
                 auto OU = fsm->get_router()->getOutputUnit(outport);
                 if (OU->get_direction() != "Local") {
                     outportBools[outport] = true;
+                } else {
+                    delete[] outportBools;
+                    delete message;
+                    return false;
+                    // flits at local port will be consumed next cycle
                 }
             }
         }
         for (int outport = 0; outport < num_outports; outport++) {
             if (outportBools[outport]) {
                 ProbeMessage *probe_msg = new ProbeMessage(*in_msg);
+                probe_msg->DEBUG_set_last_router(get_router_id());
                 probe_msg->path.push_back(outport);
                 fsm->sendMessage(probe_msg, outport);
             }

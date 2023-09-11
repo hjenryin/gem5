@@ -14,21 +14,17 @@ namespace spin {
 
 void MoveManager::handleMessage(SpinMessage *msg, int inport, bool from_self) {
     // TODO: check if msg should be dropped
+    msg->set_time(curTick());
     switch (msg->get_msg_type()) {
     case MOVE_MSG: {
         auto move_msg = static_cast<MoveMessage *>(msg);
-        if (from_self) {
-            if (move_msg->path.size() == 0) {
-                // move has returned, transition to forward progress,
-                // freeze one waiting VC
-
-            } else {
-                // strip the first direction and forward
-                int outport_id = move_msg->path.pop_front();
-                fsm->sendMessage(move_msg, outport_id);
-            }
+        if (from_self && move_msg->path.size() == 0) {
+            // deadlock detected, do nothing in manager
+            assert(fsm->get_state() == MOVE);
         } else {
-            assert(fsm->get_state() == FROZEN);
+            if (!from_self) {
+                assert(fsm->get_state() == FROZEN);
+            }
             // strip the first direction and forward, freeze one waiting VC
             int outport_id = move_msg->path.pop_front();
             int invc =
@@ -89,17 +85,12 @@ void MoveManager::handleMessage(SpinMessage *msg, int inport, bool from_self) {
             }
         }
         break;
+    default:
+        fatal("Unknown message type received in MoveManager. This may be a "
+              "wrong ProbeMSG.\n");
     }
 }
 
-void MoveManager::sendMove(LoopBuffer path) {
-
-    int tll = path.size();
-    int outport_id = path.pop_front();
-    auto msg = new MoveMessage(get_router_id(), path, Cycles(2 * tll - 1),
-                               outport_id);
-    fsm->sendMessage(msg, outport_id);
-}
 void MoveManager::sendKillMove(LoopBuffer path) {
     int outport_id = path.pop_front();
     auto msg = new KillMoveMessage(get_router_id(), path);
@@ -108,8 +99,8 @@ void MoveManager::sendKillMove(LoopBuffer path) {
 void MoveManager::sendProbeMove(LoopBuffer path) {
     int tll = path.size();
     int outport_id = path.pop_front();
-    auto msg = new ProbeMoveMessage(get_router_id(), path, Cycles(2 * tll - 1),
-                                    outport_id);
+    auto msg =
+        new ProbeMoveMessage(get_router_id(), path, Cycles(2 * tll - 1));
     fsm->sendMessage(msg, outport_id);
 }
 int MoveManager::get_router_id() { return fsm->get_router()->get_id(); }

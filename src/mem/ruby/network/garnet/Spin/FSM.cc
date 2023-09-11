@@ -9,11 +9,14 @@ namespace ruby {
 namespace garnet {
 namespace spin {
 Cycles SpinFSM::detectionThreshold = Cycles(10);
-SpinFSM::SpinFSM(Router *router)
-    : Consumer(router), probeMan(this), moveMan(this), m_state(OFF),
-      m_router(router), sender_id(-1), is_deadlock(false) {}
+SpinFSM::SpinFSM(Router *router, bool spin_enabled)
+    : probeMan(this), moveMan(this), m_state(OFF), m_router(router),
+      sender_id(-1), is_deadlock(false), spin_enabled(spin_enabled),
+      currentTimeoutLimit(Cycles(INFINITE_)) {}
 
 void SpinFSM::flitArrive(garnet::flit *flit, int port, int vc) {
+    if (!spin_enabled)
+        return;
     if (m_state == OFF) {
         m_state = DL_DETECT;
         this->invc = vc;
@@ -29,18 +32,20 @@ flit *SpinFSM::roundRobinInVC(int &inport, int &invc) {
     int new_inport, new_vc;
     PortDirection inport_dir;
     flit *new_flit = NULL;
-    for (int i = 1; i <= m_router->get_num_inports(); i++) {
-        new_inport = (inport + i) % m_router->get_num_inports();
-        for (int j = 0; j < m_router->get_vc_per_vnet(); j++) {
-            new_vc = (invc + j) % m_router->get_num_vcs();
+    const int num_inports = m_router->get_num_inports();
+    const int num_vcs = m_router->get_vc_per_vnet();
+    for (int i = 1; i <= num_inports; i++) {
+        new_inport = (inport + i) % num_inports;
+        for (int j = 0; j < num_vcs; j++) {
+            new_vc = (invc + j) % num_vcs;
             if (m_router->getInputUnit(new_inport)
                     ->isReady(new_vc, curTick())) {
                 auto IU = m_router->getInputUnit(new_inport);
                 int outport = IU->get_outport(new_vc);
                 auto OU = m_router->getOutputUnit(outport);
                 if (OU->get_direction() != "Local") {
-                    i = m_router->get_num_inports() + 1;
-                    j = m_router->get_vc_per_vnet() + 1;
+                    i = num_inports + 1;
+                    j = num_vcs + 1;
                     // which jumps out of both loops
                     new_flit = IU->peekTopFlit(new_vc);
                 }
@@ -62,6 +67,10 @@ void SpinFSM::flitLeave(garnet::flit *flit) {
 }
 
 void SpinFSM::wakeup() {
+    if (m_router->get_id() == 10 && (curTick() == 144 || curTick() == 145)) {
+        std::cout << " ";
+    }
+    msg_sent_this_cycle.clear();
     assert(latest_cycle_debug <
            getCycles(curTick())); // fsm should not wake up twice in a cycle
     latest_cycle_debug = getCycles(curTick());
@@ -69,10 +78,20 @@ void SpinFSM::wakeup() {
         spinning = false;
         assert(m_state == FROZEN || m_state == FW_PROGRESS);
         if (m_state == FW_PROGRESS) {
-            m_state = PROBE_MOVE;
-            reset_is_deadlock();
-            reset_counter(Cycles(loopBuf.size()));
-            moveMan.sendProbeMove(loopBuf);
+            // check there is still a vc waiting on first outport
+            int first_outport = getLoopBuf().peek_front();
+            int inport = m_router->get_frozen_inport(first_outport);
+            m_router->toggle_freeze_vc(false);
+            int invc =
+                m_router->find_vc_waiting_outport(inport, first_outport);
+            if (invc == -1) {
+                re_init(); // no vc waiting, abort with no kill_move sent
+            } else {
+                m_router->toggle_freeze_vc(true, inport, invc, first_outport);
+                m_state = PROBE_MOVE;
+                reset_counter(Cycles(loopBuf.size()));
+                moveMan.sendProbeMove(loopBuf);
+            }
         } else {
             re_init();
         }
@@ -138,12 +157,12 @@ void SpinFSM::reset_is_deadlock() {
     is_deadlock = false;
     sender_id = -1;
 }
+
 void SpinFSM::processSpinMessage() {
     if (msg_store.msg == NULL) {
         return;
     }
-    SpinMessage *msg = msg_store.msg;
-    int inport = msg_store.inport;
+    auto [msg, inport] = msg_store;
     msg_store.clear();
 
     const bool from_self = (sender_id == m_router->get_id());
@@ -151,14 +170,20 @@ void SpinFSM::processSpinMessage() {
     // Internal State transition
     switch (msg->get_msg_type()) {
     case PROBE_MSG: {
-        bool deadlock_detected = probeMan.handleProbe(msg, inport, from_self);
-        if (deadlock_detected) {
-            // TODO infinitely running? Don't think will happen. If exist
-            // some loop, there exists some probe which can detect it.
-            assert(m_state == DL_DETECT);
-            m_state = MOVE;
-            loopBuf = msg->path;
-            reset_counter(Cycles(loopBuf.size()));
+        if (m_state == FROZEN || m_state == FW_PROGRESS ||
+            m_state == PROBE_MOVE) {
+            delete msg;
+        } else {
+            bool deadlock_detected =
+                probeMan.handleProbe(msg, inport, from_self);
+            if (deadlock_detected) {
+                // TODO infinitely running? Don't think will happen. If exist
+                // some loop, there exists some probe which can detect it.
+                assert(m_state == DL_DETECT);
+                m_state = MOVE;
+                loopBuf = msg->path;
+                reset_counter(Cycles(loopBuf.size()));
+            }
         }
     }
 
@@ -180,7 +205,7 @@ void SpinFSM::processSpinMessage() {
         auto move_msg = static_cast<MoveMessage *>(msg);
         if (from_self) {
             if (move_msg->path.empty()) {
-                m_state = FW_PROGRESS;
+                m_state = FW_PROGRESS; // deadlock confirmed
             }
             reset_counter(move_msg->spin_time);
             is_deadlock = true;
@@ -216,36 +241,44 @@ void SpinFSM::checkTimeout() {
     auto time = curCycles() - counter_start_time;
     assert(time <= currentTimeoutLimit);
     if (time == currentTimeoutLimit) {
-
         if (m_state == DL_DETECT) {
             reset_counter(Cycles(TDD));
-            probeMan.sendNewProbe(
-                m_router->getInputUnit(inport)->get_outport(invc), inport);
-        } else if (m_state == MOVE) {
-            reset_counter(Cycles(loopBuf.size()));
-            moveMan.sendKillMove(loopBuf);
-            m_state = KILL_MOVE;
-        } else if (m_state == FW_PROGRESS) {
-            // forward progress is for the initiating router
-            currentTimeoutLimit = Cycles(INFINITE_); // stop counter
-            pushSpin();
-        } else if (m_state == FROZEN) {
-            currentTimeoutLimit = Cycles(INFINITE_); // stop counter
-            pushSpin();
-        } else if (m_state == PROBE_MOVE) {
-            reset_counter(Cycles(loopBuf.size()));
-            moveMan.sendKillMove(loopBuf);
-            m_state = KILL_MOVE;
-        } else if (m_state == KILL_MOVE) {
-            // This happens if a KILL_MOVE_MSG collides with a move from
-            // different source_id.
-            re_init();
-            loopBuf = {};
+            int outport = m_router->getInputUnit(inport)->get_outport(invc);
+            if (msg_sent_this_cycle.find(outport) ==
+                msg_sent_this_cycle.end()) {
+                probeMan.sendNewProbe(outport, inport);
+            }
+
+        } else {
+            assert(msg_sent_this_cycle.empty());
+            if (m_state == MOVE) {
+                reset_counter(Cycles(loopBuf.size()));
+                moveMan.sendKillMove(loopBuf);
+                m_state = KILL_MOVE;
+            } else if (m_state == FW_PROGRESS) {
+                // forward progress is for the initiating router
+                currentTimeoutLimit = Cycles(INFINITE_); // stop counter
+                pushSpin();
+            } else if (m_state == FROZEN) {
+                currentTimeoutLimit = Cycles(INFINITE_); // stop counter
+                pushSpin();
+            } else if (m_state == PROBE_MOVE) {
+                reset_counter(Cycles(loopBuf.size()));
+                moveMan.sendKillMove(loopBuf);
+                m_state = KILL_MOVE;
+            } else if (m_state == KILL_MOVE) {
+                // This happens if a KILL_MOVE_MSG collides with a move from
+                // different source_id.
+                re_init();
+                loopBuf = {};
+            }
         }
     }
 }
-// void SpinFSM::notify_spin_complete() {}
 void SpinFSM::sendMessage(SpinMessage *msg, int outport) {
+    assert(msg_sent_this_cycle.find(outport) == msg_sent_this_cycle.end());
+    assert(msg->get_time() == curTick());
+    msg_sent_this_cycle.insert(outport);
     auto link = m_router->getOutputUnit(outport)->get_out_link();
     link->pushSpinMessage(msg);
 }

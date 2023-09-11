@@ -47,15 +47,18 @@ namespace ruby
 
 namespace garnet
 {
-int Router::total_num_routers = 0;
+uint32_t Router::total_num_routers = 0;
 Router::Router(const Params &p)
     : BasicRouter(p), Consumer(this), m_latency(p.latency),
       m_virtual_networks(p.virt_nets), m_vc_per_vnet(p.vcs_per_vnet),
       m_num_vcs(m_virtual_networks * m_vc_per_vnet), m_bit_width(p.width),
       m_network_ptr(nullptr), routingUnit(this), switchAllocator(this),
-      crossbarSwitch(this), wormhole(p.wormhole), spinFSM(this) {
-    if (p.router_id >= total_num_routers) {
-        total_num_routers = p.router_id + 1;
+      crossbarSwitch(this), wormhole(p.wormhole),
+      spinFSM(this, p.spin_enabled) {
+    if (total_num_routers == 0) {
+        total_num_routers = p.num_total;
+    } else {
+        assert(total_num_routers == p.num_total);
     }
     m_input_unit.clear();
     m_output_unit.clear();
@@ -230,6 +233,8 @@ void Router::spin_frozen_flit() {
         t_flit->set_outport(outport);
         t_flit->set_vc(-1); // signals spinned flit
         // perform link traversal **immediately**
+        // This will not be blocked by a message to be sent at the next cycle,
+        // since the SA hasn't woke up yet.
         t_flit->advance_stage(LT_, clockEdge(Cycles(0)));
         t_flit->set_time(clockEdge(Cycles(0)));
         getOutputUnit(outport)->insert_flit(t_flit);

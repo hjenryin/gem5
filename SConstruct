@@ -192,7 +192,6 @@ main = Environment(tools=[
         ConfigFile, AddLocalRPATH, SwitchingHeaders, TagImpliesTool, Blob,
     ])
 
-main.Append(CPPFLAGS=['-Wno-reorder','-Wno-deprecated-declarations'])
 
 main.Tool(SCons.Tool.FindTool(['gcc', 'clang'], main))
 main.Tool(SCons.Tool.FindTool(['g++', 'clang++'], main))
@@ -412,10 +411,12 @@ for variant_path in variant_paths:
         # Enable -Wall and -Wextra and then disable the few warnings that
         # we consistently violate
         env.Append(CCFLAGS=['-Wall', '-Wundef', '-Wextra',
-                            '-Wno-sign-compare', '-Wno-unused-parameter'])
+                            '-Wno-sign-compare',
+                            '-Wno-unused-parameter',
+                            '-Wno-deprecated-declarations'])
 
         # We always compile using C++17
-        env.Append(CXXFLAGS=['-std=c++17'])
+        env.Append(CXXFLAGS=['-Wno-reorder','-std=c++17'])
 
         if sys.platform.startswith('freebsd'):
             env.Append(CCFLAGS=['-I/usr/local/include'])

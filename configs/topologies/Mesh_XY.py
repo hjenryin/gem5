@@ -64,11 +64,15 @@ class Mesh_XY(SimpleTopology):
         assert num_rows > 0 and num_rows <= num_routers
         num_columns = int(num_routers / num_rows)
         assert num_columns * num_rows == num_routers
-
+        print(options)
         # Create the routers in the mesh
         routers = [
             Router(
-                router_id=i, latency=router_latency, wormhole=options.wormhole
+                router_id=i,
+                latency=router_latency,
+                wormhole=options.wormhole,
+                spin_enabled=options.spin_enabled,
+                num_total=num_routers,
             )
             for i in range(num_routers)
         ]

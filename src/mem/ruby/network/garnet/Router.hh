@@ -125,6 +125,7 @@ class Router : public BasicRouter, public Consumer
                           int outport = -1);
     void spin_frozen_flit();
     int get_frozen_vc(int inport) { return frozens.get_vc(inport); }
+    int get_frozen_inport(int outport) { return frozens.get_inport(outport); }
 
     int route_compute(RouteInfo route, int inport, PortDirection direction);
     void grant_switch(int inport, flit *t_flit);
@@ -154,7 +155,7 @@ class Router : public BasicRouter, public Consumer
     static int get_total_num_routers() { return total_num_routers; }
 
   private:
-    static int total_num_routers; // Magic share!
+    static uint32_t total_num_routers;
     Cycles m_latency;
     uint32_t m_virtual_networks, m_vc_per_vnet, m_num_vcs;
     uint32_t m_bit_width;
@@ -182,6 +183,13 @@ class Router : public BasicRouter, public Consumer
             if (find(inport) == end())
                 return -1;
             return (*this)[inport].second;
+        }
+        int get_inport(int outport) {
+            for (auto it = begin(); it != end(); ++it) {
+                if (it->second.second == outport)
+                    return it->first;
+            }
+            return -1;
         }
         /**
          * @return inport, vc, outport
