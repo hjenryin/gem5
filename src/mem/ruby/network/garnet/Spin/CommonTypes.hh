@@ -29,6 +29,7 @@ enum SpinMessageType
     PROBE_MOVE_MSG,
     KILL_MOVE_MSG
 };
+enum SpecialVC { SPIN_MSG = -2, SPIN_FLIT = -1 };
 // Order of the messages determines the priority of the messages
 } // namespace spin
 } // namespace garnet

@@ -1,5 +1,7 @@
 #include "mem/ruby/network/garnet/Spin/ProbeManager.hh"
 
+#include "base/trace.hh"
+#include "debug/SpinFSMDEBUG.hh"
 #include "mem/ruby/network/garnet/InputUnit.hh"
 #include "mem/ruby/network/garnet/OutputUnit.hh"
 #include "mem/ruby/network/garnet/Router.hh"
@@ -30,6 +32,7 @@ bool ProbeManager::test_outport(int inport, int invc, int outport) {
 ProbeManager::ProbeManager(SpinFSM *fsm) : fsm(fsm) {}
 
 void ProbeManager::sendNewProbe(int outport, int watch_inport) {
+    assert(outport <= 15 && outport >= 0);
     ProbeMessage *message = new ProbeMessage(get_router_id(), watch_inport);
     message->path.push_back(outport);
     fsm->sendMessage(message, outport);
@@ -46,19 +49,29 @@ void ProbeManager::sendMove(LoopBuffer path) {
     fsm->sendMessage(msg, outport_id);
 }
 /**
- * @brief Handles the probe message.
+ *  Handles the probe message. Message is not deleted incase we need it
+ * later.
  *
- * - If we aren't the sender, or the probe message returns to a new inport of
- * the sender, then the probe will be forwarded if priority check passes.
- * - If the probe message returns to a visited inport of the sender,
+ * @brief - If we aren't the sender, or the probe message returns to a new
+ * inport of the sender, then the probe will be forwarded if priority check
+ * passes.
+ * @brief - If the probe message returns to a visited inport of the sender,
  * then a deadlock is detected. The path of the msg will be properly set, and a
- * move message will be sent if fsm is not already in MOVE. Returns true to
+ * move message will be sent if fsm is not already in MOVE.
+ * @brief - Returns true to
  * indicate that fsm should transition to move state.
  *
  * @return true if deadlock detected, false otherwise
  */
 bool ProbeManager::handleProbe(SpinMessage *message, int inport,
                                bool from_self) {
+    if (from_self) {
+        DPRINTF(SpinFSMDEBUG, "Router %d received probe from self\n",
+                get_router_id());
+    } else {
+        DPRINTF(SpinFSMDEBUG, "Router %d received probe from %d\n",
+                get_router_id(), message->sender_id);
+    }
     message->set_time(curTick());
     assert(message->get_msg_type() == PROBE_MSG);
     ProbeMessage *in_msg = static_cast<ProbeMessage *>(message);
@@ -70,23 +83,21 @@ bool ProbeManager::handleProbe(SpinMessage *message, int inport,
             int first_outport = in_msg->path.peek_front();
             int vc = fsm->get_router()->find_vc_waiting_outport(inport,
                                                                 first_outport);
-            if (fsm->get_current_sender_ID() == -1 && vc != -1) {
-                assert(fsm->get_state() == MOVE || fsm->get_state() == FROZEN);
+            if (fsm->get_mover_ID() == -1 && vc != -1) {
+                assert(fsm->get_state() == DL_DETECT);
                 fsm->set_current_sender_ID(get_router_id());
                 sendMove(in_msg->path);
                 fsm->get_router()->toggle_freeze_vc(true, inport, vc,
                                                     first_outport);
-                delete in_msg;
                 return true;
             } else {
-                delete in_msg;
                 return false;
             }
         }
     }
     if (SpinFSM::getCurrentPriority(get_router_id()) >
         SpinFSM::getCurrentPriority(in_msg->sender_id)) {
-        delete message; // drop probe based on dynamic priority
+        // drop probe based on dynamic priority
         return false;
     } else {
         // forward probe message
@@ -101,7 +112,6 @@ bool ProbeManager::handleProbe(SpinMessage *message, int inport,
             flit *t_flit = IU->peekTopFlit(invc);
             if (t_flit == NULL) {
                 delete[] outportBools;
-                delete message;
                 return false;
             } else {
                 int outport = IU->get_outport(invc);
@@ -110,7 +120,6 @@ bool ProbeManager::handleProbe(SpinMessage *message, int inport,
                     outportBools[outport] = true;
                 } else {
                     delete[] outportBools;
-                    delete message;
                     return false;
                     // flits at local port will be consumed next cycle
                 }
@@ -124,7 +133,6 @@ bool ProbeManager::handleProbe(SpinMessage *message, int inport,
                 fsm->sendMessage(probe_msg, outport);
             }
         }
-        delete message;
         delete[] outportBools;
         return false;
     }

@@ -37,3 +37,5 @@ Source('ProbeManager.cc')
 Source('MoveManager.cc')
 Source('LoopBuffer.cc')
 Source('SpinMessage.cc')
+
+DebugFlag('SpinFSMDEBUG')

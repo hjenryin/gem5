@@ -35,12 +35,13 @@ class SpinFSM
     LoopBuffer getLoopBuf() { return loopBuf; }
     bool get_spinning() { return spinning; }
     int get_counter_inport() { return inport; }
-    int set_current_sender_ID(int id) { return sender_id = id; }
-    int get_current_sender_ID() { return sender_id; }
+    int set_current_sender_ID(int id) { return mover_id = id; }
+    int get_mover_ID() { return mover_id; }
     static int getCurrentPriority(int sender_id);
     bool test_outport_used(int outport){
       return msg_sent_this_cycle.find(outport) != msg_sent_this_cycle.end();
     }
+    void registerOutport(int outport);
 
   protected:
     bool spin_enabled;
@@ -75,11 +76,11 @@ class SpinFSM
         }
     } msg_store;
 
-    int sender_id;
+    int mover_id;
     void reset_is_deadlock();
     bool is_deadlock;
     Cycles curCycles() { return getCycles(curTick()); }
-    bool spinning = false;
+    uint8_t spinning = 0;
     Cycles latest_cycle_debug;
     std::set<int> msg_sent_this_cycle;
 };

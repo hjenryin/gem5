@@ -72,7 +72,10 @@ class flitBuffer
     flit *
     peekTopFlit()
     {
-        return m_buffer.front();
+        if (m_buffer.empty())
+            return nullptr;
+        else
+            return m_buffer.front();
     }
 
     void

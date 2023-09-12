@@ -1,5 +1,7 @@
 #include "mem/ruby/network/garnet/Spin/FSM.hh"
 
+#include "base/trace.hh"
+#include "debug/SpinFSMDEBUG.hh"
 #include "mem/ruby/network/garnet/InputUnit.hh"
 #include "mem/ruby/network/garnet/OutputUnit.hh"
 #include "mem/ruby/network/garnet/Router.hh"
@@ -11,12 +13,15 @@ namespace spin {
 Cycles SpinFSM::detectionThreshold = Cycles(10);
 SpinFSM::SpinFSM(Router *router, bool spin_enabled)
     : probeMan(this), moveMan(this), m_state(OFF), m_router(router),
-      sender_id(-1), is_deadlock(false), spin_enabled(spin_enabled),
+      mover_id(-1), is_deadlock(false), spin_enabled(spin_enabled),
       currentTimeoutLimit(Cycles(INFINITE_)) {}
 
 void SpinFSM::flitArrive(garnet::flit *flit, int port, int vc) {
     if (!spin_enabled)
         return;
+    if (m_router->getInportDirection(port) == "Local") {
+        return;
+    }
     if (m_state == OFF) {
         m_state = DL_DETECT;
         this->invc = vc;
@@ -36,6 +41,8 @@ flit *SpinFSM::roundRobinInVC(int &inport, int &invc) {
     const int num_vcs = m_router->get_vc_per_vnet();
     for (int i = 1; i <= num_inports; i++) {
         new_inport = (inport + i) % num_inports;
+        if (m_router->getInportDirection(new_inport) == "Local")
+            continue;
         for (int j = 0; j < num_vcs; j++) {
             new_vc = (invc + j) % num_vcs;
             if (m_router->getInputUnit(new_inport)
@@ -65,17 +72,33 @@ void SpinFSM::flitLeave(garnet::flit *flit) {
         }
     }
 }
-
 void SpinFSM::wakeup() {
-    if (m_router->get_id() == 10 && (curTick() == 144 || curTick() == 145)) {
-        std::cout << " ";
+    if (msg_store.msg == NULL) {
+        DPRINTF(SpinFSMDEBUG,
+                "SpinFSM at router %d with state %d woke up with empty "
+                "msg_store.\n",
+                m_router->get_id(), m_state);
+    } else {
+        DPRINTF(
+            SpinFSMDEBUG,
+            "SpinFSM at router %d with state %d woke up with msg type %d.\n",
+            m_router->get_id(), m_state, msg_store.msg->get_msg_type());
     }
+
     msg_sent_this_cycle.clear();
     assert(latest_cycle_debug <
            getCycles(curTick())); // fsm should not wake up twice in a cycle
     latest_cycle_debug = getCycles(curTick());
-    if (spinning) { // special transition due the complete of spin
-        spinning = false;
+
+    if (spinning == 1) {
+        // special transition due the complete of spin
+        spinning = 0;
+        if (msg_store.msg != NULL) {
+            std::cout << "Drop a " << msg_store.msg->get_msg_type()
+                      << " msg because spinning has just set to 0."
+                      << std::endl;
+            msg_store.clear();
+        }
         assert(m_state == FROZEN || m_state == FW_PROGRESS);
         if (m_state == FW_PROGRESS) {
             // check there is still a vc waiting on first outport
@@ -89,12 +112,20 @@ void SpinFSM::wakeup() {
             } else {
                 m_router->toggle_freeze_vc(true, inport, invc, first_outport);
                 m_state = PROBE_MOVE;
-                reset_counter(Cycles(loopBuf.size()));
+                reset_counter(Cycles(2 * loopBuf.size()));
                 moveMan.sendProbeMove(loopBuf);
             }
         } else {
+            if (msg_store.msg != NULL) {
+                std::cout << "Drop a " << msg_store.msg->get_msg_type()
+                          << " msg because spinning has just set to 1."
+                          << std::endl;
+                msg_store.clear();
+            }
             re_init();
         }
+    } else if (spinning == 2) {
+        spinning--;
     } else {
         processSpinMessage(); // read message and transition
         checkTimeout();       // check timeout and transition
@@ -103,7 +134,6 @@ void SpinFSM::wakeup() {
 Tick SpinFSM::getTick(Cycles cycles) {
     return m_router->cyclesToTicks(cycles);
 }
-
 Cycles SpinFSM::getCycles(Tick tick) { return m_router->ticksToCycles(tick); }
 
 void SpinFSM::registerSpinMessage(SpinMessage *msg, int inport, Tick time) {
@@ -111,12 +141,12 @@ void SpinFSM::registerSpinMessage(SpinMessage *msg, int inport, Tick time) {
     spin::SpinMessageType msg_type = msg->get_msg_type();
     // auto msg_stored_type = msg_store.msg->get_msg_type();
     if (msg_type == MOVE_MSG || msg_type == PROBE_MOVE_MSG) {
-        if (sender_id != -1 && msg->sender_id != sender_id) {
+        if (mover_id != -1 && msg->sender_id != mover_id) {
             delete msg;
         }
     }
     if (msg_type == KILL_MOVE_MSG) {
-        if (msg->sender_id != sender_id && sender_id != -1) {
+        if (msg->sender_id != mover_id && mover_id != -1) {
             // Case 1: The fsm hasn't received the MOVE_MSG yet.
             // * but the fsm can already be reinited, and the kill move passes
             // a second time in an 8 shape. Case 2: When two loops overlaps,
@@ -155,7 +185,7 @@ void SpinFSM::re_init() {
 }
 void SpinFSM::reset_is_deadlock() {
     is_deadlock = false;
-    sender_id = -1;
+    mover_id = -1;
 }
 
 void SpinFSM::processSpinMessage() {
@@ -165,13 +195,12 @@ void SpinFSM::processSpinMessage() {
     auto [msg, inport] = msg_store;
     msg_store.clear();
 
-    const bool from_self = (sender_id == m_router->get_id());
+    const bool from_self = (msg->sender_id == m_router->get_id());
 
     // Internal State transition
     switch (msg->get_msg_type()) {
     case PROBE_MSG: {
-        if (m_state == FROZEN || m_state == FW_PROGRESS ||
-            m_state == PROBE_MOVE) {
+        if (m_state != OFF && m_state != DL_DETECT) {
             delete msg;
         } else {
             bool deadlock_detected =
@@ -182,25 +211,35 @@ void SpinFSM::processSpinMessage() {
                 assert(m_state == DL_DETECT);
                 m_state = MOVE;
                 loopBuf = msg->path;
+                int first_outport = loopBuf.peek_front();
+                assert(first_outport <= 15 && first_outport >= 0);
                 reset_counter(Cycles(loopBuf.size()));
             }
+            delete msg;
         }
     }
 
         // probeMan was called in this case, and since all other cases
         // will call the moveMan in the end, we need to return here.
         return;
-    case PROBE_MOVE_MSG:
+    case PROBE_MOVE_MSG: {
+        auto move_msg = static_cast<ProbeMoveMessage *>(msg);
         if (from_self) {
             assert(m_state == PROBE_MOVE);
-            assert(msg->path.empty());
-            m_state = FW_PROGRESS;
+            if (move_msg->path.empty()) {
+                m_state = FW_PROGRESS; // deadlock confirmed
+            }
             is_deadlock = true;
             reset_counter(Cycles(loopBuf.size()));
             // We don't think the +1 in the paper is necessary.
+        } else {
+            assert(m_state == DL_DETECT || m_state == OFF);
+            m_state = FROZEN;
+            is_deadlock = true;
+            mover_id = move_msg->sender_id;
+            reset_counter(move_msg->spin_time);
         }
-
-        break;
+    } break;
     case MOVE_MSG: {
         auto move_msg = static_cast<MoveMessage *>(msg);
         if (from_self) {
@@ -210,10 +249,10 @@ void SpinFSM::processSpinMessage() {
             reset_counter(move_msg->spin_time);
             is_deadlock = true;
         } else {
-            assert(m_state == DL_DETECT);
+            assert(m_state == DL_DETECT || m_state == OFF);
             m_state = FROZEN;
             is_deadlock = true;
-            sender_id = move_msg->sender_id;
+            mover_id = move_msg->sender_id;
             reset_counter(move_msg->spin_time);
         }
     } break;
@@ -222,10 +261,8 @@ void SpinFSM::processSpinMessage() {
         if (from_self) {
             assert(m_state == KILL_MOVE);
             if (msg->path.empty()) {
-                loopBuf = {};
+                loopBuf.clear();
             }
-        } else {
-            assert(m_state == FROZEN);
         }
         re_init();
         break;
@@ -238,9 +275,13 @@ void SpinFSM::processSpinMessage() {
 }
 
 void SpinFSM::checkTimeout() {
+
     auto time = curCycles() - counter_start_time;
     assert(time <= currentTimeoutLimit);
     if (time == currentTimeoutLimit) {
+        DPRINTF(SpinFSMDEBUG,
+                "SpinFSM at router %d with state %d timed out.\n",
+                m_router->get_id(), m_state);
         if (m_state == DL_DETECT) {
             reset_counter(Cycles(TDD));
             int outport = m_router->getInputUnit(inport)->get_outport(invc);
@@ -270,20 +311,28 @@ void SpinFSM::checkTimeout() {
                 // This happens if a KILL_MOVE_MSG collides with a move from
                 // different source_id.
                 re_init();
-                loopBuf = {};
+                loopBuf.clear();
             }
         }
     }
 }
-void SpinFSM::sendMessage(SpinMessage *msg, int outport) {
+void SpinFSM::registerOutport(int outport) {
     assert(msg_sent_this_cycle.find(outport) == msg_sent_this_cycle.end());
-    assert(msg->get_time() == curTick());
     msg_sent_this_cycle.insert(outport);
-    auto link = m_router->getOutputUnit(outport)->get_out_link();
-    link->pushSpinMessage(msg);
+}
+void SpinFSM::sendMessage(SpinMessage *msg, int outport) {
+    assert(msg->get_time() == curTick());
+    registerOutport(outport);
+    auto OU = m_router->getOutputUnit(outport);
+    OU->get_out_link()->pushSpinMessage(msg);
+    DPRINTF(SpinFSMDEBUG,
+            "SpinFSM at router %d with state %d sent msg type %d to outport "
+            "%s (%d).\n",
+            m_router->get_id(), m_state, msg->get_msg_type(),
+            OU->get_direction(), outport);
 }
 int SpinFSM::getCurrentPriority(int sender_id) {
-    return (sender_id + curTick() / (8 * TDD)) %
+    return (sender_id + curTick() / (4 * TDD)) %
            Router::get_total_num_routers();
     // MAGIC NUMBER!
 }
@@ -296,8 +345,9 @@ void SpinFSM::reset_counter(Cycles c) {
 void SpinFSM::pushSpin() {
     m_router->spin_frozen_flit(); // TODO
     m_router->schedule_wakeup(Cycles(1));
+    m_router->schedule_wakeup(Cycles(2));
     assert(!spinning);
-    spinning = true;
+    spinning = 2;
 }
 
 } // namespace spin

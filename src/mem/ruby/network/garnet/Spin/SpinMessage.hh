@@ -33,8 +33,8 @@ class ProbeMessage : public SpinMessage
 {
   public:
     ProbeMessage(int sender_id, int watch_inport)
-        : SpinMessage({}, sender_id), return_log({{watch_inport, 0}}),
-          DEBUG_last_router(sender_id) {}
+        : SpinMessage(LoopBuffer(), sender_id),
+          return_log({{watch_inport, 0}}), DEBUG_last_router(sender_id) {}
     ProbeMessage(const ProbeMessage &rhs) : SpinMessage(rhs) {
         return_log = rhs.return_log;
         DEBUG_last_router = rhs.DEBUG_last_router;

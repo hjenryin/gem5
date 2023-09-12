@@ -11,7 +11,6 @@ class Ring(SimpleTopology):
 
     def __init__(self, controllers):
         self.nodes = controllers
-        print(controllers)
 
     def makeTopology(self, options, network, IntLink, ExtLink, Router):
         nodes = self.nodes
@@ -26,7 +25,6 @@ class Ring(SimpleTopology):
         # There must be an evenly divisible number of cntrls to routers
         assert len(nodes) % num_routers == 0
         cntrls_per_router = len(nodes) // num_routers
-        print(len(nodes), num_routers)
 
         # Create the routers in the ring
         routers = [

@@ -82,9 +82,9 @@ CrossbarSwitch::wakeup()
             t_flit->advance_stage(LT_, m_router->clockEdge(Cycles(1)));
             t_flit->set_time(m_router->clockEdge(Cycles(1)));
 
+            m_router->getSpinFSM()->flitLeave(t_flit);
             // This will take care of waking up the Network Link
             // in the next cycle
-            m_router->getSpinFSM()->flitLeave(t_flit);
             m_router->getOutputUnit(outport)->insert_flit(t_flit);
             switch_buffer.getTopFlit();
             m_crossbar_activity++;

@@ -90,7 +90,8 @@ NetworkLink::wakeup()
         flit *t_flit = link_srcQueue->getTopFlit();
         DPRINTF(RubyNetwork, "Transmission will finish at %ld :%s\n",
                 clockEdge(m_latency), *t_flit);
-        if (m_type != NUM_LINK_TYPES_) {
+        if (m_type != NUM_LINK_TYPES_ &&
+            dynamic_cast<spin::SpinMessage *>(t_flit) == NULL) {
             // Only for assertions and debug messages
             assert(t_flit->m_width == bitWidth);
             assert((std::find(mVnets.begin(), mVnets.end(),
@@ -101,8 +102,11 @@ NetworkLink::wakeup()
         linkBuffer.insert(t_flit);
         link_consumer->scheduleEventAbsolute(clockEdge(m_latency));
         m_link_utilized++;
-        m_vc_load[t_flit->get_vc()]++;
+        if (int vc = t_flit->get_vc(); vc >= 0) {
+            // Otherwise it's a spin message.
+            m_vc_load[vc]++;
         }
+    }
 
     if (!link_srcQueue->isEmpty()) {
         scheduleEvent(Cycles(1));

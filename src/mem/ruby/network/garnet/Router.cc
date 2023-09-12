@@ -32,7 +32,9 @@
 
 #include "mem/ruby/network/garnet/Router.hh"
 
+#include "base/trace.hh"
 #include "debug/RubyNetwork.hh"
+#include "debug/SpinFSMDEBUG.hh"
 #include "mem/ruby/network/garnet/CreditLink.hh"
 #include "mem/ruby/network/garnet/GarnetNetwork.hh"
 #include "mem/ruby/network/garnet/InputUnit.hh"
@@ -199,7 +201,7 @@ int Router::find_vc_waiting_outport(int inport, int outport) {
     InputUnit *input_unit = getInputUnit(inport);
     for (int vc = 0; vc < m_vc_per_vnet; vc++) {
         flit *t_flit = input_unit->peekTopFlit(vc);
-        if (t_flit != nullptr && t_flit->get_outport() == outport) {
+        if (t_flit != nullptr && input_unit->get_outport(vc) == outport) {
             return vc;
         }
     }
@@ -208,7 +210,7 @@ int Router::find_vc_waiting_outport(int inport, int outport) {
 
 void Router::toggle_freeze_vc(bool freeze, int inport, int vc, int outport) {
     if (freeze) {
-        assert(!frozens.empty());
+        // assert(!frozens.empty()); ??
         assert(inport != -1 && vc != -1 && outport != -1);
         frozens.push(inport, vc, outport);
         InputUnit *input_unit = getInputUnit(inport);
@@ -225,19 +227,25 @@ void Router::toggle_freeze_vc(bool freeze, int inport, int vc, int outport) {
 
 void Router::spin_frozen_flit() {
     assert(!frozens.empty());
-    while (!frozens.empty()) {
-        auto [inport, vc, outport] = frozens.pop();
+    Frozens tmp(frozens);
+    while (!tmp.empty()) {
+
+        auto [inport, vc, outport] = tmp.pop();
         InputUnit *input_unit = getInputUnit(inport);
         // remove the flit from input buffer
         flit *t_flit = input_unit->getTopFlit(vc);
+        m_input_unit[inport]->set_vc_idle(vc, curTick());
         t_flit->set_outport(outport);
-        t_flit->set_vc(-1); // signals spinned flit
-        // perform link traversal **immediately**
-        // This will not be blocked by a message to be sent at the next cycle,
-        // since the SA hasn't woke up yet.
-        t_flit->advance_stage(LT_, clockEdge(Cycles(0)));
-        t_flit->set_time(clockEdge(Cycles(0)));
+        t_flit->set_vc(spin::SPIN_FLIT); // signals spinned flit
+        t_flit->advance_stage(LT_, clockEdge(Cycles(1)));
+        t_flit->set_time(clockEdge(Cycles(1)));
+        spinFSM.registerOutport(outport);
         getOutputUnit(outport)->insert_flit(t_flit);
+        DPRINTF(SpinFSMDEBUG,
+                "Router %d: Flit %p %s is spinned from inport %d "
+                "vc %d to outport %s (%d)\n",
+                m_id, t_flit, *t_flit, inport, vc,
+                getOutportDirection(outport), outport);
     }
 }
 

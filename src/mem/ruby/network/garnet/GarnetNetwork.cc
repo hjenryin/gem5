@@ -522,8 +522,7 @@ GarnetNetwork::regStats()
         .unit(statistics::units::Rate<statistics::units::Ratio,
                                       statistics::units::Tick>::get())
         .desc("Reception Rate calculated by ticks.");
-    recep_rate = sum(m_packets_received) / (m_num_rows * m_num_cols) /
-                 (rootStats.simTicks);
+    recep_rate = sum(m_packets_received) / m_nodes / (rootStats.simTicks);
 
     // Links
     m_total_ext_in_link_utilization.name(name() + ".ext_in_link_utilization");

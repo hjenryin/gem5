@@ -31,8 +31,10 @@
 
 #include "mem/ruby/network/garnet/InputUnit.hh"
 
+#include "base/trace.hh"
 #include "debug/Lab3.hh"
 #include "debug/RubyNetwork.hh"
+#include "debug/SpinFSMDEBUG.hh"
 #include "mem/ruby/network/garnet/Credit.hh"
 #include "mem/ruby/network/garnet/Router.hh"
 #include "mem/ruby/network/garnet/Spin/CommonTypes.hh"
@@ -81,24 +83,31 @@ void
 InputUnit::wakeup()
 {
     flit *t_flit;
+    int flit_count = 0;
     int msg_count = 0;
     while (m_in_link->isReady(curTick())) {
-        count += 1;
 
         t_flit = m_in_link->consumeLink();
 
         if (dynamic_cast<spin::SpinMessage *>(t_flit) == NULL) {
             // regular flit; proceed as usual
+            assert(flit_count == 0);
+            flit_count++;
             DPRINTF(RubyNetwork, "Router[%d] Consuming:%s Width: %d Flit:%s\n",
                     m_router->get_id(), m_in_link->name(),
                     m_router->getBitWidth(), *t_flit);
             assert(t_flit->m_width == m_router->getBitWidth());
             int vc = t_flit->get_vc();
-            if (vc == -1) { // a flit pushed in by a spin
+            if (vc == spin::SPIN_FLIT) { // a flit pushed in by a spin
                 vc = m_router->get_frozen_vc(m_id);
                 assert(vc != -1);
                 t_flit->set_vc(vc);
-                assert(m_router->getSpinFSM()->get_spinning());
+                assert(m_router->getSpinFSM()->get_spinning() == 1);
+                DPRINTF(SpinFSMDEBUG,
+                        "Router[%d] received a flit %p %s from "
+                        "spin with vc %d, port %s (%d)\n",
+                        m_router->get_id(), t_flit, *t_flit, vc, m_direction,
+                        m_id);
             }
             t_flit->increment_hops(); // for stats
 
@@ -154,8 +163,10 @@ InputUnit::wakeup()
                 m_router->schedule_wakeup(Cycles(1));
             }
         } else {
+            assert(msg_count == 0);
+            msg_count++;
             spin::SpinMessage *t_spin_msg =
-                dynamic_cast<spin::SpinMessage *>(t_flit);
+                static_cast<spin::SpinMessage *>(t_flit);
             m_router->getSpinFSM()->registerSpinMessage(t_spin_msg, m_id,
                                                         curTick());
         }

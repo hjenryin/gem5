@@ -2,6 +2,8 @@
 #define __MEM_RUBY_NETWORK_GARNET_0_SPIN_MOVE_MANAGER_HH__
 #include "mem/ruby/network/garnet/Spin/MoveManager.hh"
 
+#include "base/trace.hh"
+#include "debug/SpinFSMDEBUG.hh"
 #include "mem/ruby/network/garnet/OutputUnit.hh"
 #include "mem/ruby/network/garnet/Router.hh"
 #include "mem/ruby/network/garnet/Spin/CommonTypes.hh"
@@ -13,6 +15,13 @@ namespace garnet {
 namespace spin {
 
 void MoveManager::handleMessage(SpinMessage *msg, int inport, bool from_self) {
+    if (from_self) {
+        DPRINTF(SpinFSMDEBUG, "Router %d received %d from self\n",
+                get_router_id(), msg->get_msg_type());
+    } else {
+        DPRINTF(SpinFSMDEBUG, "Router %d received %d from router %d\n",
+                get_router_id(), msg->get_msg_type(), msg->sender_id);
+    }
     // TODO: check if msg should be dropped
     msg->set_time(curTick());
     switch (msg->get_msg_type()) {
@@ -20,7 +29,7 @@ void MoveManager::handleMessage(SpinMessage *msg, int inport, bool from_self) {
         auto move_msg = static_cast<MoveMessage *>(msg);
         if (from_self && move_msg->path.size() == 0) {
             // deadlock detected, do nothing in manager
-            assert(fsm->get_state() == MOVE);
+            assert(fsm->get_state() == FW_PROGRESS);
         } else {
             if (!from_self) {
                 assert(fsm->get_state() == FROZEN);
