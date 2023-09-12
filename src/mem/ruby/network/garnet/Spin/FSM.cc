@@ -10,7 +10,6 @@ namespace gem5 {
 namespace ruby {
 namespace garnet {
 namespace spin {
-Cycles SpinFSM::detectionThreshold = Cycles(10);
 SpinFSM::SpinFSM(Router *router, bool spin_enabled)
     : probeMan(this), moveMan(this), m_state(OFF), m_router(router),
       mover_id(-1), is_deadlock(false), spin_enabled(spin_enabled),
@@ -27,7 +26,7 @@ void SpinFSM::flitArrive(garnet::flit *flit, int port, int vc) {
         this->invc = vc;
         this->inport = port;
         this->flit_watch = flit;
-        reset_counter(detectionThreshold);
+        reset_counter(Cycles(TDD));
     }
 }
 /**
@@ -112,7 +111,7 @@ void SpinFSM::wakeup() {
             } else {
                 m_router->toggle_freeze_vc(true, inport, invc, first_outport);
                 m_state = PROBE_MOVE;
-                reset_counter(Cycles(2 * loopBuf.size()));
+                reset_counter(Cycles(loopBuf.size()));
                 moveMan.sendProbeMove(loopBuf);
             }
         } else {
@@ -179,7 +178,7 @@ void SpinFSM::re_init() {
         reset_counter(Cycles(INFINITE_)); // init() in the paper
     } else {
         this->flit_watch = new_flit;
-        reset_counter(detectionThreshold);
+        reset_counter(Cycles(TDD));
         m_state = DL_DETECT;
     }
 }

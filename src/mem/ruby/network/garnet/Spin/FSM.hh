@@ -54,7 +54,6 @@ class SpinFSM
     int inport;
     flit *flit_watch;
     Cycles counter_start_time;
-    static Cycles detectionThreshold;
     Tick getTick(Cycles c);
     Cycles getCycles(Tick t);
     Cycles currentTimeoutLimit;
