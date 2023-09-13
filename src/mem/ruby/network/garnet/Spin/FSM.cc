@@ -85,18 +85,13 @@ void SpinFSM::wakeup() {
     }
 
     msg_sent_this_cycle.clear();
-    assert(latest_cycle_debug <
-           getCycles(curTick())); // fsm should not wake up twice in a cycle
-    latest_cycle_debug = getCycles(curTick());
 
     if (spinning == 1) {
-        // special transition due the complete of spin
+        // special transition due the completion of spin
         spinning = 0;
         if (msg_store.msg != NULL) {
-            std::cout << "Drop a " << msg_store.msg->get_msg_type()
-                      << " msg because spinning has just set to 0."
-                      << std::endl;
-            msg_store.clear();
+            assert(msg_store.msg->get_msg_type() == PROBE_MSG);
+            delete msg_store.msg;
         }
         assert(m_state == FROZEN || m_state == FW_PROGRESS);
         if (m_state == FW_PROGRESS) {
@@ -115,20 +110,19 @@ void SpinFSM::wakeup() {
                 moveMan.sendProbeMove(loopBuf);
             }
         } else {
-            if (msg_store.msg != NULL) {
-                std::cout << "Drop a " << msg_store.msg->get_msg_type()
-                          << " msg because spinning has just set to 1."
-                          << std::endl;
-                msg_store.clear();
-            }
             re_init();
         }
     } else if (spinning == 2) {
+        if (msg_store.msg != NULL) {
+            assert(msg_store.msg->get_msg_type() == PROBE_MSG);
+            delete msg_store.msg;
+        }
         spinning--;
     } else {
         processSpinMessage(); // read message and transition
         checkTimeout();       // check timeout and transition
     }
+    msg_store.clear();
 }
 Tick SpinFSM::getTick(Cycles cycles) {
     return m_router->cyclesToTicks(cycles);
@@ -142,6 +136,7 @@ void SpinFSM::registerSpinMessage(SpinMessage *msg, int inport, Tick time) {
     if (msg_type == MOVE_MSG || msg_type == PROBE_MOVE_MSG) {
         if (mover_id != -1 && msg->sender_id != mover_id) {
             delete msg;
+            return;
         }
     }
     if (msg_type == KILL_MOVE_MSG) {
@@ -152,9 +147,11 @@ void SpinFSM::registerSpinMessage(SpinMessage *msg, int inport, Tick time) {
             // the router may drop a move. Then it will receive the kill_move
             // of the dropped move, which should be ignored.
             delete msg;
+            return;
         }
     }
     if (msg_store.msg == NULL) {
+
         msg_store.msg = msg;
         msg_store.inport = inport;
         return;
@@ -192,7 +189,6 @@ void SpinFSM::processSpinMessage() {
         return;
     }
     auto [msg, inport] = msg_store;
-    msg_store.clear();
 
     const bool from_self = (msg->sender_id == m_router->get_id());
 
