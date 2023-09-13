@@ -70,7 +70,25 @@ GarnetNetwork::GarnetNetwork(const Params &p)
     m_max_vcs_per_vnet = 0;
     m_buffers_per_data_vc = p.buffers_per_data_vc;
     m_buffers_per_ctrl_vc = p.buffers_per_ctrl_vc;
-    m_routing_algorithm = p.routing_algorithm;
+    switch (p.routing_algorithm) {
+    case TABLE_:
+        m_routing_algorithm = _TABLE_;
+        break;
+    case DIM_:
+        if (p.topology == "Ring") {
+            m_routing_algorithm = _RING_;
+        } else if (p.topology == "Torus2D") {
+            m_routing_algorithm = _2D_TORUS_;
+        } else if (p.topology == "Torus3D") {
+            m_routing_algorithm = _3D_TORUS_;
+        } else {
+            m_routing_algorithm = _XY_;
+        }
+        break;
+    default:
+        m_routing_algorithm = _CUSTOM_;
+        break;
+    }
     m_next_packet_id = 0;
 
     m_enable_fault_model = p.enable_fault_model;
@@ -79,7 +97,7 @@ GarnetNetwork::GarnetNetwork(const Params &p)
 
     m_vnet_type.resize(m_virtual_networks);
 
-    for (int i = 0 ; i < m_virtual_networks ; i++) {
+    for (int i = 0; i < m_virtual_networks; i++) {
         if (m_vnet_type_names[i] == "response")
             m_vnet_type[i] = DATA_VNET_; // carries data (and ctrl) packets
         else
@@ -87,9 +105,9 @@ GarnetNetwork::GarnetNetwork(const Params &p)
     }
 
     // record the routers
-    for (std::vector<BasicRouter*>::const_iterator i =  p.routers.begin();
+    for (std::vector<BasicRouter *>::const_iterator i = p.routers.begin();
          i != p.routers.end(); ++i) {
-        Router* router = safe_cast<Router*>(*i);
+        Router *router = safe_cast<Router *>(*i);
         m_routers.push_back(router);
 
         // initialize the router's network pointers
@@ -97,7 +115,7 @@ GarnetNetwork::GarnetNetwork(const Params &p)
     }
 
     // record the network interfaces
-    for (std::vector<ClockedObject*>::const_iterator i = p.netifs.begin();
+    for (std::vector<ClockedObject *>::const_iterator i = p.netifs.begin();
          i != p.netifs.end(); ++i) {
         NetworkInterface *ni = safe_cast<NetworkInterface *>(*i);
         m_nis.push_back(ni);

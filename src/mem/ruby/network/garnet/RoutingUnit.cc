@@ -30,6 +30,8 @@
 
 #include "mem/ruby/network/garnet/RoutingUnit.hh"
 
+#include <cmath>
+
 #include "base/cast.hh"
 #include "base/compiler.hh"
 #include "debug/RubyNetwork.hh"
@@ -182,23 +184,32 @@ RoutingUnit::outportCompute(RouteInfo route, int inport,
 
     // Routing Algorithm set in GarnetNetwork.py
     // Can be over-ridden from command line using --routing-algorithm = 1
-    RoutingAlgorithm routing_algorithm =
-        (RoutingAlgorithm) m_router->get_net_ptr()->getRoutingAlgorithm();
+    _RoutingAlgorithm routing_algorithm =
+        (_RoutingAlgorithm)m_router->get_net_ptr()->getRoutingAlgorithm();
 
     switch (routing_algorithm) {
-        case TABLE_:  outport =
-            lookupRoutingTable(route.vnet, route.net_dest); break;
-        case XY_:     outport =
-            outportComputeXY(route, inport, inport_dirn); break;
-        // any custom algorithm
-        case RING_:
-        outport =
-            outportComputeRing(route, inport, inport_dirn);
+    case _TABLE_:
+        outport = lookupRoutingTable(route.vnet, route.net_dest);
         break;
-        case CUSTOM_: outport =
-            outportComputeCustom(route, inport, inport_dirn); break;
-        default: outport =
-            lookupRoutingTable(route.vnet, route.net_dest); break;
+    case _XY_:
+        outport = outportComputeXY(route, inport, inport_dirn);
+        break;
+    // any custom algorithm
+    case _RING_:
+        outport = outportComputeRing(route, inport, inport_dirn);
+        break;
+    case _2D_TORUS_:
+        outport = outportCompute2DTorus(route, inport, inport_dirn);
+        break;
+    case _3D_TORUS_:
+        outport = outportCompute3DTorus(route, inport, inport_dirn);
+        break;
+    case _CUSTOM_:
+        outport = outportComputeCustom(route, inport, inport_dirn);
+        break;
+    default:
+        outport = lookupRoutingTable(route.vnet, route.net_dest);
+        break;
     }
 
     assert(outport != -1);
@@ -290,13 +301,91 @@ int RoutingUnit::outportComputeRing(RouteInfo route, int inport,
     return m_outports_dirn2idx[outport_dirn];
 }
 
+// Routing for 2D Torus
+// Find the nearest direction
+int RoutingUnit::outportCompute2DTorus(RouteInfo route, int inport,
+                                       PortDirection inport_dirn) {
+    PortDirection outport_dirn = "Unknown";
+
+    int num_routers = m_router->get_net_ptr()->getNumRouters();
+    int side_length = sqrt(num_routers);
+    assert(side_length * side_length == num_routers);
+    int my_id = m_router->get_id();
+    int dest_id = route.dest_router;
+    if (my_id % side_length != dest_id % side_length) {
+        int distance =
+            (dest_id % side_length - my_id % side_length + side_length) %
+            side_length;
+        if (distance <= (side_length / 2)) {
+            outport_dirn = "East";
+        } else {
+            outport_dirn = "West";
+        }
+    } else {
+        int distance =
+            (dest_id / side_length - my_id / side_length + side_length) %
+            side_length;
+        if (distance <= (side_length / 2)) {
+            outport_dirn = "North";
+        } else {
+            outport_dirn = "South";
+        }
+    }
+    return m_outports_dirn2idx[outport_dirn];
+}
+
+// Routing for 3D Torus
+// Find the nearest direction
+int RoutingUnit::outportCompute3DTorus(RouteInfo route, int inport,
+                                       PortDirection inport_dirn) {
+    PortDirection outport_dirn = "Unknown";
+
+    int num_routers = m_router->get_net_ptr()->getNumRouters();
+    int side_length = cbrt(num_routers);
+    assert(side_length * side_length * side_length == num_routers);
+    int my_id = m_router->get_id();
+    int dest_id = route.dest_router;
+    if (my_id % side_length != dest_id % side_length) {
+        int distance =
+            (dest_id % side_length - my_id % side_length + side_length) %
+            side_length;
+        if (distance <= (side_length / 2)) {
+            outport_dirn = "East";
+        } else {
+            outport_dirn = "West";
+        }
+    } else {
+        my_id /= side_length;
+        dest_id /= side_length;
+        if (my_id % side_length != dest_id % side_length) {
+            int distance =
+                (dest_id % side_length - my_id % side_length + side_length) %
+                side_length;
+            if (distance <= (side_length / 2)) {
+                outport_dirn = "North";
+            } else {
+                outport_dirn = "South";
+            }
+        } else {
+            my_id /= side_length;
+            dest_id /= side_length;
+            int distance =
+                (dest_id % side_length - my_id % side_length + side_length) %
+                side_length;
+            if (distance <= (side_length / 2)) {
+                outport_dirn = "Up";
+            } else {
+                outport_dirn = "Down";
+            }
+        }
+    }
+    return m_outports_dirn2idx[outport_dirn];
+}
+
 // Template for implementing custom routing algorithm
 // using port directions. (Example adaptive)
-int
-RoutingUnit::outportComputeCustom(RouteInfo route,
-                                 int inport,
-                                 PortDirection inport_dirn)
-{
+int RoutingUnit::outportComputeCustom(RouteInfo route, int inport,
+                                      PortDirection inport_dirn) {
     panic("%s placeholder executed", __FUNCTION__);
 }
 

@@ -99,11 +99,14 @@ GarnetSyntheticTraffic::GarnetSyntheticTraffic(const Params &p)
     if (p.topology == "Ring")
     {
         topology = RING_TOPOLOGY_;
-    }
-    else
-    {
+    } else if (p.topology == "Torus3D") {
+        topology = TORUS_3D_TOPOLOGY_;
+    } else if (p.topology == "Torus2D") {
+        topology = TORUS_2D_TOPOLOGY_;
+    } else {
         topology = MESH_TOPOLOGY_;
     }
+
     initTrafficType();
     if (trafficStringToEnum.count(trafficType) == 0) {
         fatal("Unknown Traffic Type: %s!\n", traffic);
@@ -194,16 +197,20 @@ GarnetSyntheticTraffic::generatePkt()
     int radix;
     if (topology == RING_TOPOLOGY_)
         radix = num_destinations;
-    else if (topology == MESH_TOPOLOGY_)
+    else if (topology == MESH_TOPOLOGY_ || topology == TORUS_2D_TOPOLOGY_)
         radix = (int)sqrt(num_destinations);
+    else if (topology == TORUS_3D_TOPOLOGY_)
+        radix = (int)cbrt(num_destinations);
     else
         fatal("Unknown topology!\n");
     unsigned destination = id;
     int dest_x = -1;
     int dest_y = -1;
+    int dest_z = -1;
     int source = id;
     int src_x = id%radix;
-    int src_y = id/radix;
+    int src_y = (id / radix) % radix;
+    int src_z = id / (radix * radix);
 
     if (singleDest >= 0)
     {
@@ -235,7 +242,8 @@ GarnetSyntheticTraffic::generatePkt()
     } else if (traffic == NEIGHBOR_) {
             dest_x = (src_x + 1) % radix;
             dest_y = src_y;
-            destination = dest_y * radix + dest_x;
+            dest_z = src_z;
+            destination = dest_y * radix + dest_x + dest_z * radix * radix;
     } else if (traffic == SHUFFLE_) {
         if (source < num_destinations/2)
             destination = source*2;
@@ -246,12 +254,13 @@ GarnetSyntheticTraffic::generatePkt()
             dest_y = src_x;
             destination = dest_y*radix + dest_x;
     } else if (traffic == TORNADO_) {
-            int bias = (int)ceil(radix / 2) - 1;
-            if (topology == RING_TOPOLOGY_)
-            bias += 1;
-            dest_x = (src_x + bias) % radix;
-            dest_y = src_y;
-            destination = dest_y * radix + dest_x;
+        int bias = (int)ceil(radix / 2);
+        if (topology == MESH_TOPOLOGY_)
+            bias -= 1;
+        dest_x = (src_x + bias) % radix;
+        dest_y = src_y;
+        dest_z = src_z;
+        destination = dest_y * radix + dest_x + dest_z * radix * radix;
     }
     else {
         fatal("Unknown Traffic Type: %s!\n", traffic);

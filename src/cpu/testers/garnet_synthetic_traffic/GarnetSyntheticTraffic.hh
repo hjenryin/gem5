@@ -109,9 +109,11 @@ class GarnetSyntheticTraffic : public ClockedObject
     };
     enum Topology
     {
-      RING_TOPOLOGY_ = 0,
-      MESH_TOPOLOGY_ = 1,
-      COUNT_TOPOLOGY_
+        RING_TOPOLOGY_ = 0,
+        MESH_TOPOLOGY_ = 1,
+        TORUS_2D_TOPOLOGY_ = 2,
+        TORUS_3D_TOPOLOGY_ = 3,
+        COUNT_TOPOLOGY_
     };
     Topology topology;
     PacketPtr retryPkt;
