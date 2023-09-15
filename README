@@ -16,7 +16,7 @@ An example to run the code is
 
 We allow topology to be Ring, Mesh_XY, Mesh_westfirst, Torus2D, and Torus3D. For the routing algorithm, 0 is for Mesh_westfirst, and 1 is for the others. We only allow uniform_random, neighbor, and tornado traffic. To enable spin, pass in `--spin-enabled` as an argument.
 
-A quick example of how our experiments are run is shown in `run.py` and `deadlock.py` in the `Test-lab4` folder.  Note that this is written for `gem5.fast`, and if you want to use `.opt` instead, you need to change it correspondingly. Here for convenience, we set the configuration so that the code finishes quickly. Feel free to modify the configurations at the beginning of these files to test other results.
+To rurun our experiments, you can use `run.py` and `deadlock.py` in the `Test-lab4` folder. Note that this is written for `gem5.fast`, and if you want to use `.opt` instead, you need to change it correspondingly. This may be time-consuming, even though we're using multi-processing. If you wish not to rerun all the results, you can remove some items from the configuration lists at the beginning of these files to test .
 
 # Code structure
 

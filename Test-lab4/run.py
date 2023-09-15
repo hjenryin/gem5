@@ -6,15 +6,18 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import math
 
+# For each traffic pattern and each topology,
+# a figure with len(vc_list) * len(spin_list) lines will be generated.
+# This configuration should generate all configurations included in our report.
 
-traffic_list = ["uniform_random"]  # "uniform_random", "tornado", "neighbor"
+traffic_list = ["uniform_random", "tornado"]
+# "uniform_random", "tornado", "neighbor"
+topo_list = ["Ring", "Torus2d", "Mesh_XY", "Mesh_westfirst"]
 # "Ring", "Torus2d", "Torus3d", "Mesh_XY", "Mesh_westfirst"
-topo_list = ["Ring"]
-vc_list = [1]  # any integer you want
-spin_list = [False]  # True, False
-cycle_list = [1000]  # any integer you want
+vc_list = [4, 3, 2, 1]  # any integer you want
+spin_list = [False, True]  # True, False
 # The list of injection rate.
-injR_list = np.round(np.arange(0.00, 0.98, 0.2), 2)
+injR_list = np.round(np.arange(0.00, 0.98, 0.02), 2)
 injR_list[0] += 0.01
 
 
@@ -86,7 +89,7 @@ receiveds = {k: [] for k in array_list}
 injecteds = {k: [] for k in array_list}
 net_latencies = {k: [] for k in array_list}
 
-pool = multiprocessing.Pool(7)
+pool = multiprocessing.Pool(8)
 # use multiprocessing to loop over net_list and inj_rate_list and run the simulation
 pbar = tqdm(total=len(files_list))
 for arr in files_list:

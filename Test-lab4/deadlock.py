@@ -6,14 +6,15 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import math
 
+# This is the configuration for deadlock-log/uniform_random-Ring.png
 traffic_list = ["uniform_random"]  # "uniform_random", "tornado", "neighbor"
 # "Ring", "Torus2d", "Torus3d", "Mesh_XY", "Mesh_westfirst"
 topo_list = ["Ring"]
 vc_list = [1]  # any integer you want
-spin_list = [False]  # True, False
-cycle_list = [1000]  # any integer you want
+spin_list = [False, True]  # True, False
+cycle_list = [1000, 10000]  # any integer you want
 # The list of injection rate.
-injR_list = np.round(np.arange(0.00, 0.98, 0.2), 2)
+injR_list = np.round(np.arange(0.00, 0.98, 0.02), 2)
 injR_list[0] += 0.01
 
 
