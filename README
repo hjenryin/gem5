@@ -1,43 +1,34 @@
-This is the gem5 simulator.
+Spin Implementation by Hongyi Jin (2021011818) and Yunzhe Zhang (202101085)
 
-The main website can be found at http://www.gem5.org
+The original main website can be found at http://www.gem5.org.
 
-A good starting point is http://www.gem5.org/about, and for
-more information about building the simulator and getting started
-please see http://www.gem5.org/documentation and
-http://www.gem5.org/documentation/learning_gem5/introduction.
+# How to run
 
-To build gem5, you will need the following software: g++ or clang,
-Python (gem5 links in the Python interpreter), SCons, zlib, m4, and lastly
-protobuf if you want trace capture and playback support. Please see
-http://www.gem5.org/documentation/general_docs/building for more details
-concerning the minimum versions of these tools.
+You can compile with `scons build/NULL/gem5.fast -j $(nproc)`.
 
-Once you have all dependencies resolved, type 'scons
-build/<CONFIG>/gem5.opt' where CONFIG is one of the options in build_opts like
-ARM, NULL, MIPS, POWER, SPARC, X86, Garnet_standalone, etc. This will build an
-optimized version of the gem5 binary (gem5.opt) with the the specified
-configuration. See http://www.gem5.org/documentation/general_docs/building for
-more details and options.
+An example to run the code is
 
-The main source tree includes these subdirectories:
-   - build_opts: pre-made default configurations for gem5
-   - build_tools: tools used internally by gem5's build process.
-   - configs: example simulation configuration scripts
-   - ext: less-common external packages needed to build gem5
-   - include: include files for use in other programs
-   - site_scons: modular components of the build system
-   - src: source code of the gem5 simulator
-   - system: source for some optional system software for simulated systems
-   - tests: regression tests
-   - util: useful utility programs and files
+```
+../gem5/build/NULL/gem5.fast ../gem5/configs/example/garnet_synth_traffic.py --network=garnet --num-cpus=16 --num-dirs=16 --topology=Ring --inj-vnet=0 --sim-cycles=10000 --injectionrate=0.1 --synthetic=uniform_random --routing-algorithm 1 --vcs-per-vnet=1 --spin-enabled
+```
 
-To run full-system simulations, you may need compiled system firmware, kernel
-binaries and one or more disk images, depending on gem5's configuration and
-what type of workload you're trying to run. Many of those resources can be
-downloaded from http://resources.gem5.org, and/or from the git repository here:
-https://gem5.googlesource.com/public/gem5-resources/
+We allow topology to be Ring, Mesh_XY, Mesh_westfirst, Torus2D, and Torus3D. For the routing algorithm, 0 is for Mesh_westfirst, and 1 is for the others. We only allow uniform_random, neighbor, and tornado traffic. To enable spin, pass in `--spin-enabled` as an argument.
 
-If you have questions, please send mail to gem5-users@gem5.org
+A quick example of how our experiments are run is shown in `run.py` and `deadlock.py` in the `Test-lab4` folder.  Note that this is written for `gem5.fast`, and if you want to use `.opt` instead, you need to change it correspondingly. Here for convenience, we set the configuration so that the code finishes quickly. Feel free to modify the configurations at the beginning of these files to test other results.
 
-Enjoy using gem5 and please share your modifications and extensions.
+# Code structure
+
+Most functional modifications can be found in `garnet/Spin`:
+
+garnet/Spin/CommonTypes.hh: defines state and message type enums
+garnet/Spin/SpinMessage.cc[.hh]: class for special spin messages, which inherits the flit class
+garnet/Spin/FSM.cc[.hh]: execute state transitions and reset counters according to received signals: incoming messages, counter timeouts, flit arrival/leaving, and after move completes.
+garnet/Spin/ProbeManager.cc[.hh]: checks eligibility for probe forwarding and sends move message
+garnet/Spin/MoveManager.cc[.hh]: processes move, kill move, and probe move, and manages their forwarding.
+garnet/Spin/LoopBuffer.cc[.hh]: class for the loop buffer that records the path in a probe message and guides forwarding of move/probe move/kill move. Also latched in the router that started a move message.
+
+Also, we made some modifications to NetworkLink, InputUnit, Router, and some other files so as to properly send and receive spin messages.
+
+## A Brief Walkthrough
+
+SpinFSM will be waked up after the InputUnit, which registers the received spin messages into the SpinFSM. Then it will process the message, change its internal state correspondingly, schedule proper timeout, and ask the ProbeManager / MoveManager to send messages to downstream routers or schedule a move. After that, the SpinFSM will check timeout and act correspondingly.
