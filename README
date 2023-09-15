@@ -1,6 +1,8 @@
 Spin Implementation by Hongyi Jin (2021011818) and Yunzhe Zhang (202101085)
 
-The original main website can be found at http://www.gem5.org.
+Original paper of SPIN: A. Ramrakhyani, P. V. Gratz and T. Krishna, "Synchronized Progress in Interconnection Networks (SPIN): A New Theory for Deadlock Freedom," 2018 ACM/IEEE 45th Annual International Symposium on Computer Architecture (ISCA), Los Angeles, CA, USA, 2018, pp. 699-711, doi: 10.1109/ISCA.2018.00064.
+
+The original website of gem5: http://www.gem5.org.
 
 # How to run
 
